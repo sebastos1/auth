@@ -1,6 +1,6 @@
+use chrono::{DateTime, Utc};
 use sea_orm::*;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "oauth_clients")]
@@ -32,7 +32,7 @@ impl Model {
     pub fn _get_redirect_uris(&self) -> Result<Vec<String>, serde_json::Error> {
         serde_json::from_str(&self.redirect_uris)
     }
-    
+
     pub fn get_allowed_scopes(&self) -> Result<Vec<String>, serde_json::Error> {
         serde_json::from_str(&self.allowed_scopes)
     }

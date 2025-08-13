@@ -1,13 +1,18 @@
-use axum::{Json, Form, http::StatusCode, extract::{State, ConnectInfo}, response::{Html, Redirect}};
-use std::net::SocketAddr;
-use sea_orm::*;
-use chrono::{DateTime, Utc};
-use anyhow::Result;
-use bcrypt::{hash, DEFAULT_COST};
-use validator::Validate;
-use serde::{Deserialize, Serialize};
-use askama::Template;
 use crate::templates::RegisterTemplate;
+use anyhow::Result;
+use askama::Template;
+use axum::{
+    Form,
+    extract::{ConnectInfo, State},
+    http::StatusCode,
+    response::{Html, Redirect},
+};
+use bcrypt::{DEFAULT_COST, hash};
+use chrono::{DateTime, Utc};
+use sea_orm::*;
+use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
+use validator::Validate;
 
 #[derive(Deserialize, Validate)]
 pub struct CreateUserRequest {
@@ -27,20 +32,18 @@ async fn get_country_from_ip(ip: &str) -> Option<String> {
     };
 
     let url = format!("https://ipapi.co/{}/country/", ip);
-    
+
     match reqwest::get(&url).await {
-        Ok(response) => {
-            match response.text().await {
-                Ok(country) => {
-                    if country == "Undefined" || country.trim().is_empty() {
-                        None
-                    } else {
-                        Some(country.trim().to_string())
-                    }
+        Ok(response) => match response.text().await {
+            Ok(country) => {
+                if country == "Undefined" || country.trim().is_empty() {
+                    None
+                } else {
+                    Some(country.trim().to_string())
                 }
-                Err(_) => None,
             }
-        }
+            Err(_) => None,
+        },
         Err(_) => None,
     }
 }
@@ -58,8 +61,10 @@ pub async fn get() -> Result<Html<String>, StatusCode> {
         title: "Register".to_string(),
         error: None,
     };
-    
-    let html = template.render().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let html = template
+        .render()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Html(html))
 }
 
@@ -69,19 +74,22 @@ pub async fn post(
     Form(req): Form<CreateUserRequest>,
 ) -> Result<Redirect, Html<String>> {
     if let Err(errors) = req.validate() {
-        let error_msg = errors.field_errors()
+        let error_msg = errors
+            .field_errors()
             .values()
             .flat_map(|errs| errs.iter())
             .map(|err| err.message.as_ref().unwrap().to_string())
             .collect::<Vec<_>>()
             .join(", ");
-            
+
         let template = RegisterTemplate {
             title: "Register - OAuth2 Server".to_string(),
             error: Some(error_msg),
         };
-        
-        let html = template.render().map_err(|_| Html("Template error".to_string()))?;
+
+        let html = template
+            .render()
+            .map_err(|_| Html("Template error".to_string()))?;
         return Err(Html(html));
     }
 
@@ -99,48 +107,19 @@ pub async fn post(
         country: Set(country),
         ..Default::default()
     };
-    
+
     match user.insert(&db).await {
-        Ok(_) => {
-            Ok(Redirect::to("/?registered=true"))
-        }
+        Ok(_) => Ok(Redirect::to("/?registered=true")),
         Err(_) => {
             let template = RegisterTemplate {
                 title: "Register - OAuth2 Server".to_string(),
                 error: Some("Email or username already exists".to_string()),
             };
-            
-            let html = template.render().map_err(|_| Html("Template error".to_string()))?;
+
+            let html = template
+                .render()
+                .map_err(|_| Html("Template error".to_string()))?;
             Err(Html(html))
         }
     }
-}
-
-pub async fn register_json(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    State(db): State<DatabaseConnection>,
-    Json(req): Json<CreateUserRequest>,
-) -> Result<Json<UserResponse>, StatusCode> {
-    req.validate().map_err(|_| StatusCode::BAD_REQUEST)?;
-    let password_hash = hash(req.password, DEFAULT_COST).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let country = get_country_from_ip(&addr.ip().to_string()).await;
-
-    let user = crate::user::ActiveModel {
-        email: Set(req.email.clone()),
-        username: Set(req.username.clone()),
-        password_hash: Set(password_hash),
-        is_admin: Set(false),
-        is_active: Set(true),
-        country: Set(country),
-        ..Default::default()
-    };
-    let user = user.insert(&db).await.map_err(|_| StatusCode::CONFLICT)?;
-
-    Ok(Json(UserResponse {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        created_at: user.created_at,
-    }))
 }

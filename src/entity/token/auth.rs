@@ -1,6 +1,6 @@
+use chrono::{DateTime, Utc};
 use sea_orm::*;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 
 const EXPIRATION_MIN: i64 = 10;
 
@@ -29,3 +29,5 @@ impl ActiveModelBehavior for ActiveModel {
         }
     }
 }
+
+crate::impl_verify!(Code);

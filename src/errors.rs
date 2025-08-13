@@ -1,5 +1,8 @@
-use axum::{response::{Html, Redirect}, http::StatusCode};
 use askama::Template;
+use axum::{
+    http::StatusCode,
+    response::{Html, Redirect},
+};
 use serde::Serialize;
 
 #[allow(dead_code)]
@@ -35,16 +38,30 @@ impl AuthError {
 
     pub fn description(&self) -> &'static str {
         match self {
-            Self::InvalidRequest => "The request is missing a required parameter, includes an invalid parameter value, or is otherwise malformed.",
-            Self::UnauthorizedClient => "The client is not authorized to request an authorization code using this method.",
+            Self::InvalidRequest => {
+                "The request is missing a required parameter, includes an invalid parameter value, or is otherwise malformed."
+            }
+            Self::UnauthorizedClient => {
+                "The client is not authorized to request an authorization code using this method."
+            }
             Self::AccessDenied => "The resource owner or authorization server denied the request.",
-            Self::UnsupportedResponseType => "The authorization server does not support obtaining an authorization code using this method.",
+            Self::UnsupportedResponseType => {
+                "The authorization server does not support obtaining an authorization code using this method."
+            }
             Self::InvalidScope => "The requested scope is invalid, unknown, or malformed.",
-            Self::ServerError => "The authorization server encountered an unexpected condition that prevented it from fulfilling the request.",
-            Self::TemporarilyUnavailable => "The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server.",
+            Self::ServerError => {
+                "The authorization server encountered an unexpected condition that prevented it from fulfilling the request."
+            }
+            Self::TemporarilyUnavailable => {
+                "The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server."
+            }
             Self::InvalidClient => "Client authentication failed.",
-            Self::InvalidGrant => "The provided authorization grant is invalid, expired, revoked, or does not match the redirection URI used in the authorization request.",
-            Self::UnsupportedGrantType => "The authorization grant type is not supported by the authorization server.",
+            Self::InvalidGrant => {
+                "The provided authorization grant is invalid, expired, revoked, or does not match the redirection URI used in the authorization request."
+            }
+            Self::UnsupportedGrantType => {
+                "The authorization grant type is not supported by the authorization server."
+            }
         }
     }
 
@@ -71,9 +88,15 @@ pub struct ErrorResponse {
     pub error_description: String,
 }
 
-pub fn error_redirect(error: AuthError, redirect_uri: &str, state: Option<&str>) -> Result<Redirect, StatusCode> {
+pub fn error_redirect(
+    error: AuthError,
+    redirect_uri: &str,
+    state: Option<&str>,
+) -> Result<Redirect, StatusCode> {
     let mut url = url::Url::parse(redirect_uri).map_err(|_| StatusCode::BAD_REQUEST)?;
-    url.query_pairs_mut().append_pair("error", error.code()).append_pair("error_description", error.description());
+    url.query_pairs_mut()
+        .append_pair("error", error.code())
+        .append_pair("error_description", error.description());
     if let Some(state) = state {
         url.query_pairs_mut().append_pair("state", state);
     }
@@ -85,7 +108,9 @@ pub fn error_page(error: AuthError) -> Result<Html<String>, StatusCode> {
         error: error.code().to_string(),
         description: error.description().to_string(),
     };
-    let html = template.render().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let html = template
+        .render()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Html(html))
 }
 
@@ -95,6 +120,6 @@ pub fn error_json(error: AuthError) -> (StatusCode, axum::Json<ErrorResponse>) {
         axum::Json(ErrorResponse {
             error: error.code().to_string(),
             error_description: error.description().to_string(),
-        })
+        }),
     )
 }
