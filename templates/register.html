@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>{{ title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body>
+    <h1>{{ title }}</h1>
+
+    {% if let Some(error) = error %}
+    <div style="color: red; margin-bottom: 1rem;">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/register">
+        <div>
+            <label>Email:</label>
+            <input type="email" name="email" required>
+        </div>
+
+        <div>
+            <label>Username:</label>
+            <input type="text" name="username" required minlength="3" maxlength="30">
+        </div>
+
+        <div>
+            <label>Password:</label>
+            <input type="password" name="password" required minlength="8">
+        </div>
+
+        <button type="submit">Register</button>
+    </form>
+
+    <p><a href="/">Back to login</a></p>
+</body>
+
+</html>
