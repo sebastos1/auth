@@ -1,7 +1,7 @@
 use axum::http::HeaderMap;
+use base64::{Engine, engine::general_purpose};
 use rand::Rng;
 use reqwest::StatusCode;
-use base64::{engine::general_purpose, Engine};
 
 pub fn generate_random_string(length: usize) -> String {
     let charset = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -16,7 +16,8 @@ pub fn generate_random_string(length: usize) -> String {
 }
 
 pub fn extract_bearer_token(headers: &axum::http::HeaderMap) -> Result<&str, StatusCode> {
-    headers.get("authorization")
+    headers
+        .get("authorization")
         .and_then(|h| h.to_str().ok())
         .and_then(|h| h.strip_prefix("Bearer "))
         .ok_or(StatusCode::UNAUTHORIZED)

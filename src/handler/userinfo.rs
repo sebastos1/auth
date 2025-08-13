@@ -22,8 +22,8 @@ pub async fn get(
     headers: HeaderMap,
     State(db): State<DatabaseConnection>,
 ) -> Result<Json<UserInfoResponse>, StatusCode> {
-    let auth_header = crate::util::extract_bearer_token(&headers)
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let auth_header =
+        crate::util::extract_bearer_token(&headers).map_err(|_| StatusCode::UNAUTHORIZED)?;
 
     let access_token = crate::token::access::Entity::verify(auth_header, &db)
         .await

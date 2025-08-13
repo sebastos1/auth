@@ -19,16 +19,17 @@ pub async fn post(
     State(db): State<DatabaseConnection>,
     Form(req): Form<RevokeRequest>,
 ) -> Result<StatusCode, (StatusCode, axum::Json<ErrorResponse>)> {
-    let (client_id, client_secret) = if let Some((id, secret)) = crate::util::extract_basic_auth(&headers) {
-        (id, secret)
-    } else {
-        (
-            req.client_id
-                .ok_or_else(|| error_json(AuthError::InvalidClient))?,
-            req.client_secret
-                .ok_or_else(|| error_json(AuthError::InvalidClient))?,
-        )
-    };
+    let (client_id, client_secret) =
+        if let Some((id, secret)) = crate::util::extract_basic_auth(&headers) {
+            (id, secret)
+        } else {
+            (
+                req.client_id
+                    .ok_or_else(|| error_json(AuthError::InvalidClient))?,
+                req.client_secret
+                    .ok_or_else(|| error_json(AuthError::InvalidClient))?,
+            )
+        };
 
     let client = crate::client::Entity::find_by_id(&client_id)
         .one(&db)
@@ -46,7 +47,7 @@ pub async fn post(
         .await
         .map_err(|_| error_json(AuthError::ServerError))?;
 
-    if let Some(token) = access_token{
+    if let Some(token) = access_token {
         if token.client_id == client_id {
             crate::token::access::Entity::delete_by_id(&req.token)
                 .exec(&db)

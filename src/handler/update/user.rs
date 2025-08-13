@@ -1,3 +1,4 @@
+use crate::util::extract_bearer_token;
 use axum::{
     Json,
     extract::State,
@@ -6,7 +7,6 @@ use axum::{
 use chrono::Utc;
 use sea_orm::*;
 use serde::{Deserialize, Serialize};
-use crate::util::extract_bearer_token;
 
 #[derive(Deserialize)]
 pub struct UpdateUserRequest {
@@ -37,7 +37,6 @@ pub async fn patch(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::UNAUTHORIZED)?;
-
 
     let requesting_user = crate::user::Entity::find_by_id(&token_record.user_id)
         .one(&db)
