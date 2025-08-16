@@ -1,22 +1,32 @@
-use crate::templates::SuccessTemplate;
-use askama::Template;
-use axum::{extract::Query, http::StatusCode, response::Html};
-use serde::Deserialize;
+use axum::{extract::Query, response::Html};
 
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct SuccessQuery {
     code: Option<String>,
     error: Option<String>,
+    state: Option<String>,
 }
 
-pub async fn get(Query(params): Query<SuccessQuery>) -> Result<Html<String>, StatusCode> {
-    let template = SuccessTemplate {
-        code: params.code,
-        error: params.error,
+pub async fn get(Query(params): Query<SuccessQuery>) -> Html<String> {
+    let message_type = if params.code.is_some() {
+        "AUTH_SUCCESS"
+    } else {
+        "AUTH_ERROR"
     };
 
-    let html = template
-        .render()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Html(html))
+    Html(format!(
+        r#"<script>
+            window.opener.postMessage({{
+                type: "{}",
+                code: "{}",
+                error: "{}",
+                state: "{}"
+            }}, "*");
+            window.close();
+        </script>"#,
+        message_type,
+        params.code.unwrap_or_default(),
+        params.error.unwrap_or_default(),
+        params.state.unwrap_or_default()
+    ))
 }

@@ -1,9 +1,4 @@
-use crate::util::extract_bearer_token;
-use axum::{
-    Json,
-    extract::State,
-    http::{HeaderMap, StatusCode},
-};
+use axum::{Extension, Json, extract::State, http::StatusCode};
 use chrono::Utc;
 use sea_orm::*;
 use serde::{Deserialize, Serialize};
@@ -28,23 +23,11 @@ pub struct UpdateUserResponse {
 }
 
 pub async fn patch(
-    headers: HeaderMap,
+    Extension(auth_user): Extension<crate::middleware::user::AuthenticatedUser>,
     State(db): State<DatabaseConnection>,
     Json(req): Json<UpdateUserRequest>,
 ) -> Result<Json<UpdateUserResponse>, StatusCode> {
-    let token = extract_bearer_token(&headers)?;
-    let token_record = crate::token::access::Entity::verify(token, &db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-
-    let requesting_user = crate::user::Entity::find_by_id(&token_record.user_id)
-        .one(&db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-
-    if req.user_id != requesting_user.id && !requesting_user.is_admin {
+    if req.user_id != auth_user.user.id && !auth_user.user.is_admin {
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -72,7 +55,7 @@ pub async fn patch(
         user_update.bio = Set(Some(bio));
     }
 
-    if requesting_user.is_admin {
+    if auth_user.user.is_admin {
         if let Some(is_moderator) = req.is_moderator {
             user_update.is_moderator = Set(is_moderator);
         }

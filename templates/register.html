@@ -2,39 +2,52 @@
 <html>
 
 <head>
-    <title>{{ title }}</title>
+    <title>Register</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 
 <body>
-    <h1>{{ title }}</h1>
+    <h1>Register</h1>
 
-    {% if let Some(error) = error %}
+    {% if let Some(general_error) = errors.get("general") %}
     <div style="color: red; margin-bottom: 1rem;">
-        {{ error }}
+        {{ general_error }}
     </div>
     {% endif %}
 
-    <form method="post" action="/register">
+    <form method="post" action="/register" novalidate>
+        <input type="hidden" name="client_id" value="{{ client_id }}">
+        <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
+        <input type="hidden" name="state" value="{{ state }}">
+        <input type="hidden" name="scopes" value="{{ scopes }}">
+
         <div>
             <label>Email:</label>
-            <input type="email" name="email" required>
+            <input type="email" name="email" value="{{ email }}">
+            {% if let Some(email_error) = errors.get("email") %}
+            <div style="color: red; font-size: 0.9em;">{{ email_error }}</div>
+            {% endif %}
         </div>
-
+    
         <div>
             <label>Username:</label>
-            <input type="text" name="username" required minlength="3" maxlength="30">
+            <input type="text" name="username" value="{{ username }}">
+            {% if let Some(username_error) = errors.get("username") %}
+            <div style="color: red; font-size: 0.9em;">{{ username_error }}</div>
+            {% endif %}
         </div>
-
+    
         <div>
             <label>Password:</label>
-            <input type="password" name="password" required minlength="8">
+            <input type="password" name="password">
+            {% if let Some(password_error) = errors.get("password") %}
+            <div style="color: red; font-size: 0.9em;">{{ password_error }}</div>
+            {% endif %}
         </div>
-
+    
         <button type="submit">Register</button>
     </form>
 
     <p><a href="/">Back to login</a></p>
 </body>
-
 </html>

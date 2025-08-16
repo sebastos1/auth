@@ -40,6 +40,14 @@ impl ActiveModelBehavior for ActiveModel {
             created_at: Set(chrono::Utc::now()),
             updated_at: Set(chrono::Utc::now()),
             last_login_at: Set(None),
+
+            // defaults
+            is_moderator: Set(false),
+            is_admin: Set(false),
+            is_active: Set(true),
+            is_member: Set(false),
+            is_verified: Set(false),
+
             ..ActiveModelTrait::default()
         }
     }

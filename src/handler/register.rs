@@ -1,100 +1,147 @@
-use crate::templates::RegisterTemplate;
-use anyhow::Result;
+use crate::{templates::RegisterTemplate};
+use crate::util::get_country_from_ip;
 use askama::Template;
 use axum::{
-    Form,
-    extract::{ConnectInfo, State},
-    http::StatusCode,
-    response::{Html, Redirect},
+    extract::{ConnectInfo, Query, State}, response::{Html, Redirect}, Form
 };
 use bcrypt::{DEFAULT_COST, hash};
-use chrono::{DateTime, Utc};
+use log::{error, info};
+use reqwest::StatusCode;
 use sea_orm::*;
-use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
-use validator::Validate;
+use serde::Deserialize;
+use std::{collections::HashMap, net::SocketAddr};
 
-#[derive(Deserialize, Validate)]
+#[derive(Deserialize)]
 pub struct CreateUserRequest {
-    #[validate(email(message = "Invalid email format"))]
     email: String,
-    #[validate(length(min = 3, max = 30, message = "Username must be 3-30 characters"))]
     username: String,
-    #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
     password: String,
+    client_id: String,
+    redirect_uri: String,
+    state: Option<String>,
+    scopes: String,
 }
 
-async fn get_country_from_ip(ip: &str) -> Option<String> {
-    let ip = if ip == "::1" || ip == "127.0.0.1" || ip.is_empty() {
-        "72.229.28.185" // testing
-    } else {
-        ip
-    };
-
-    let url = format!("https://ipapi.co/{}/country/", ip);
-
-    match reqwest::get(&url).await {
-        Ok(response) => match response.text().await {
-            Ok(country) => {
-                if country == "Undefined" || country.trim().is_empty() {
-                    None
-                } else {
-                    Some(country.trim().to_string())
-                }
-            }
-            Err(_) => None,
-        },
-        Err(_) => None,
-    }
+#[derive(Deserialize)]
+pub struct RegisterQuery {
+    client_id: Option<String>,
+    redirect_uri: Option<String>,
+    scope: Option<String>,
+    state: Option<String>,
 }
 
-#[derive(Serialize)]
-pub struct UserResponse {
-    pub id: String,
-    pub email: String,
-    pub username: String,
-    pub created_at: DateTime<Utc>,
-}
-
-pub async fn get() -> Result<Html<String>, StatusCode> {
+// this needs the client id and allat in order to login after
+pub async fn get(Query(oauth_params): Query<RegisterQuery>) -> Result<Html<String>, StatusCode> {
     let template = RegisterTemplate {
-        title: "Register".to_string(),
-        error: None,
+        errors: HashMap::new(),
+        email: String::new(),
+        username: String::new(),
+        client_id: oauth_params.client_id.unwrap_or_default(),
+        redirect_uri: oauth_params.redirect_uri.unwrap_or_default(),
+        state: oauth_params.state.unwrap_or_default(),
+        scopes: oauth_params.scope.unwrap_or_default(),
     };
-
-    let html = template
-        .render()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Html(html))
+    
+    template.render().map(Html).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+fn validate_format(req: &CreateUserRequest) -> HashMap<String, String> {
+    let mut errors = HashMap::new();
+
+    if req.email.is_empty() || !req.email.contains('@') {
+        errors.insert("email".to_string(), "Please enter a valid email address".to_string());
+    }
+
+    if req.username.len() < 3 || req.username.len() > 30 {
+        errors.insert(
+            "username".to_string(),
+            "Username must be between 3 and 30 characters".to_string(),
+        );
+    }
+
+    if req.password.len() < 8 {
+        errors.insert(
+            "password".to_string(),
+            "Password must be at least 8 characters".to_string(),
+        );
+    }
+
+    errors
+}
+
+async fn validate_database(req: &CreateUserRequest, db: &DatabaseConnection) -> HashMap<String, String> {
+    let mut errors = HashMap::new();
+
+    match crate::user::Entity::find()
+        .filter(
+            Condition::any()
+                .add(crate::user::Column::Email.eq(&req.email))
+                .add(crate::user::Column::Username.eq(&req.username)),
+        )
+        .one(db)
+        .await
+    {
+        Ok(Some(existing)) => {
+            if existing.email == req.email {
+                errors.insert("email".to_string(), "This email is already registered".to_string());
+            }
+            if existing.username == req.username {
+                errors.insert("username".to_string(), "This username is already taken".to_string());
+            }
+        }
+        Ok(None) => {}
+        Err(e) => {
+            error!("Database error during user lookup: {}", e);
+            errors.insert("general".to_string(), "Server error. Please try again.".to_string());
+        }
+    }
+
+    errors
+}
+
+// redirects if successful, returns html form the form if fails
 pub async fn post(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(db): State<DatabaseConnection>,
     Form(req): Form<CreateUserRequest>,
 ) -> Result<Redirect, Html<String>> {
-    if let Err(errors) = req.validate() {
-        let error_msg = errors
-            .field_errors()
-            .values()
-            .flat_map(|errs| errs.iter())
-            .map(|err| err.message.as_ref().unwrap().to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-
+    let render_error = |errors: HashMap<String, String>| {
         let template = RegisterTemplate {
-            title: "Register - OAuth2 Server".to_string(),
-            error: Some(error_msg),
+            errors,
+            email: req.email.clone(),
+            username: req.username.clone(),
+            client_id: req.client_id.clone(),
+            redirect_uri: req.redirect_uri.clone(),
+            state: req.state.clone().unwrap_or_default(),
+            scopes: req.scopes.clone(),
         };
+        Html(template.render().unwrap())
+    };
 
-        let html = template
-            .render()
-            .map_err(|_| Html("Template error".to_string()))?;
-        return Err(Html(html));
+    // check format fast first
+    let format_errors = validate_format(&req);
+    if !format_errors.is_empty() {
+        return Err(render_error(format_errors));
     }
 
-    let password_hash = hash(req.password, DEFAULT_COST)
-        .map_err(|_| Html("Password hashing failed".to_string()))?;
+    // db check
+    let db_errors = validate_database(&req, &db).await;
+    if !db_errors.is_empty() {
+        return Err(render_error(db_errors));
+    }
+
+    let password_hash = match hash(req.password, DEFAULT_COST) {
+        Ok(hash) => hash,
+        Err(e) => {
+            error!("Password hashing failed: {}", e);
+            let mut errors = HashMap::new();
+            errors.insert(
+                "general".to_string(),
+                "Registration failed. Please try again.".to_string(),
+            );
+            return Err(render_error(errors));
+        }
+    };
 
     let country = get_country_from_ip(&addr.ip().to_string()).await;
 
@@ -102,24 +149,30 @@ pub async fn post(
         email: Set(req.email.clone()),
         username: Set(req.username.clone()),
         password_hash: Set(password_hash),
-        is_admin: Set(false),
-        is_active: Set(true),
         country: Set(country),
         ..Default::default()
     };
 
     match user.insert(&db).await {
-        Ok(_) => Ok(Redirect::to("/?registered=true")),
-        Err(_) => {
-            let template = RegisterTemplate {
-                title: "Register - OAuth2 Server".to_string(),
-                error: Some("Email or username already exists".to_string()),
-            };
-
-            let html = template
-                .render()
-                .map_err(|_| Html("Template error".to_string()))?;
-            Err(Html(html))
+        Ok(_) => {
+            info!("Registered user: {}", req.username);
+            let redirect_url = format!(
+                "/authorize?response_type=code&client_id={}&redirect_uri={}&scope={}&state={}",
+                urlencoding::encode(&req.client_id),
+                urlencoding::encode(&req.redirect_uri), 
+                urlencoding::encode(&req.scopes),
+                urlencoding::encode(&req.state.unwrap_or_default())
+            );
+            Ok(Redirect::to(&redirect_url))
+        }
+        Err(e) => {
+            error!("Failed to create user: {}", e);
+            let mut errors = HashMap::new();
+            errors.insert(
+                "general".to_string(),
+                "Registration failed. Please try again.".to_string(),
+            );
+            Err(render_error(errors))
         }
     }
 }
