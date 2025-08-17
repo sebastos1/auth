@@ -4,11 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAWSURBVBhXY/y/+SbDzbfM6e/keBl4ADWfBeJUTONtAAAAAElFTkSuQmCC">
     <title>{% block title %}sjallabong auth{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png"
+        href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAWSURBVBhXY/y/+SbDzbfM6e/keBl4ADWfBeJUTONtAAAAAElFTkSuQmCC">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;700&display=swap');
-
         * {
             margin: 0;
             padding: 0;
@@ -85,7 +85,6 @@
             font-size: 1rem;
             font-family: inherit;
             transition: border-color 0.2s ease;
-            font-family: "Josefin Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif ;
         }
 
         .form-input:focus {
@@ -100,18 +99,15 @@
         /* Fix autofill styles and corner artifacts */
         .form-input:-webkit-autofill,
         .form-input:-webkit-autofill:hover,
-        .form-input:-webkit-autofill:focus,
-        .form-input:-webkit-autofill:active {
-            -webkit-box-shadow: 0 0 0 1000px #495057 inset ;
-            -webkit-text-fill-color: #f8f9fa ;
-            border-color: #495057 ;
-            border-radius: 8px ;
-            font-family: "Josefin Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif ;
-            transition: none ;
+        .form-input:-webkit-autofill:focus {
+            -webkit-box-shadow: 0 0 0 1000px #495057 inset !important;
+            -webkit-text-fill-color: #f8f9fa !important;
+            border-color: #495057 !important;
+            border-radius: 8px !important;
         }
 
         .form-input:-webkit-autofill:focus {
-            border-color: #ff69b4 ;
+            border-color: #ff69b4;
         }
 
         .password-container {
@@ -127,13 +123,22 @@
             border: none;
             color: #adb5bd;
             cursor: pointer;
-            font-size: 0.9rem;
             padding: 0;
             user-select: none;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .password-toggle:hover {
             color: #f8f9fa;
+        }
+
+        .password-toggle svg {
+            width: 20px;
+            height: 20px;
         }
 
         .form-button {
@@ -182,6 +187,22 @@
         .auth-secondary .form-button:hover {
             background: #5a6268;
             box-shadow: 0 2px 8px rgba(108, 117, 125, 0.2);
+        }
+
+        .auth-link {
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+
+        .auth-link a {
+            color: #ff69b4;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s ease;
+        }
+
+        .auth-link a:hover {
+            color: #e91e63;
         }
 
         .error {

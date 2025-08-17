@@ -130,8 +130,8 @@
                     button {
                         background: var(--auth-button-bg, #343a40);
                         color: var(--auth-button-color, #f8f9fa);
-                        border: var(--auth-button-border, 1px solid #495057);
-                        border-radius: var(--auth-button-radius, 8px);
+                        border: none;
+                        border-radius: 4px;
                         padding: var(--auth-button-padding, 14px 28px);
                         font-size: var(--auth-button-font-size, 16px);
                         font-weight: var(--auth-button-font-weight, 400);
@@ -176,9 +176,6 @@
                     .loading {
                         width: 18px;
                         height: 18px;
-                        border: 2px solid transparent;
-                        border-top: 2px solid currentColor;
-                        border-radius: 50%;
                         animation: spin 1s linear infinite;
                     }
 
@@ -189,7 +186,6 @@
                     .theme-light {
                         --auth-button-bg: #f8f9fa;
                         --auth-button-color: #212529;
-                        --auth-button-border: 1px solid #dee2e6;
                         --auth-button-hover-bg: #e9ecef;
                         --auth-button-brand-color: #e91e63;
                     }
@@ -197,7 +193,6 @@
                     .theme-outline {
                         --auth-button-bg: transparent;
                         --auth-button-color: #6c757d;
-                        --auth-button-border: 2px solid #6c757d;
                         --auth-button-brand-color: #ff69b4;
                         --auth-button-hover-bg: #6c757d;
                         --auth-button-hover-color: white;
