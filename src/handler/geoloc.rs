@@ -1,5 +1,5 @@
 use axum::{extract::Query, Json};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::net::IpAddr;
 use std::str::FromStr;
 
@@ -8,17 +8,12 @@ pub struct GeolocateQuery {
     ip: String,
 }
 
-#[derive(Serialize)]
-pub struct GeolocateResponse {
-    country: Option<String>,
+pub async fn get(Query(params): Query<GeolocateQuery>) -> Json<Option<String>> {
+    let country = get_country_from_ip(&params.ip).await;
+    Json(country)
 }
 
-pub async fn get(Query(params): Query<GeolocateQuery>) -> Json<GeolocateResponse> {
-    let country = get_country_from_ip_maxmind(&params.ip).await;
-    Json(GeolocateResponse { country })
-}
-
-async fn get_country_from_ip_maxmind(ip_str: &str) -> Option<String> {
+pub async fn get_country_from_ip(ip_str: &str) -> Option<String> {
     let ip_str = if ip_str == "::1" || ip_str == "127.0.0.1" || ip_str.is_empty() {
         "72.229.28.185"
     } else {

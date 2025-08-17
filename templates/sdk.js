@@ -79,16 +79,15 @@
 
         openPopup(url) {
             const width = 500;
-            const height = 600;
-            const left = Math.round((screen.width / 2) - (width / 2));
-            const top = Math.round((screen.height / 2) - (height / 2));
+            const height = 650;
+            const left = Math.round((screen.width / 2) - (width));
+            const top = Math.round((screen.height / 2) - (height));
 
             const features = [
                 `width=${width}`,
                 `height=${height}`,
                 `left=${left}`,
                 `top=${top}`,
-                "scrollbars=yes",
                 "resizable=yes",
                 "status=no",
                 "toolbar=no",
@@ -117,33 +116,26 @@
         }
 
         getButtonText() {
-            const customText = this.textContent?.trim();
-            if (customText) {
-                return customText;
-            }
-
             const type = this.getAttribute("type") || "login";
-            const action = type === "register" ? "Register" : "Sign in";
-
+            const action = type === "register" ? "Register" : "Log in";
             return `${action} with <span class="brand">sjallabong</span>`;
         }
 
         render() {
-            const theme = this.getAttribute("theme") || "light";
+            const theme = this.getAttribute("theme") || "dark";
             const disabled = this.hasAttribute("disabled");
 
             this.shadowRoot.innerHTML = `
-                <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@700&display=swap" rel="stylesheet">
                 <style>
                     button {
-                        background: var(--auth-button-bg, #4285f4);
-                        color: var(--auth-button-color, white);
-                        border: var(--auth-button-border, none);
+                        background: var(--auth-button-bg, #343a40);
+                        color: var(--auth-button-color, #f8f9fa);
+                        border: var(--auth-button-border, 1px solid #495057);
                         border-radius: var(--auth-button-radius, 8px);
                         padding: var(--auth-button-padding, 14px 28px);
                         font-size: var(--auth-button-font-size, 16px);
-                        font-weight: var(--auth-button-font-weight, 500);
-                        font-family: var(--auth-button-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+                        font-weight: var(--auth-button-font-weight, 400);
+                        font-family: var(--auth-button-font-family, "Josefin Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
                         cursor: pointer;
                         transition: all 0.2s ease;
                         display: inline-flex;
@@ -158,9 +150,9 @@
                     }
 
                     button:hover:not(:disabled) {
-                        background: var(--auth-button-hover-bg, #3367d6);
+                        background: var(--auth-button-hover-bg, #495057);
                         transform: translateY(-2px);
-                        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
                     }
 
                     button:active:not(:disabled) {
@@ -177,7 +169,7 @@
                     .brand {
                         font-family: "Josefin Sans", sans-serif;
                         font-weight: 700;
-                        color: var(--auth-button-brand-color, #ff6b35);
+                        color: var(--auth-button-brand-color, #ff69b4);
                         text-shadow: 0 1px 2px rgba(0,0,0,0.1);
                     }
 
@@ -194,22 +186,21 @@
                         to { transform: rotate(360deg); }
                     }
 
-                    .theme-dark {
-                        --auth-button-bg: #1a1a1a;
-                        --auth-button-hover-bg: #333;
-                        --auth-button-brand-color: #ff8c5a;
+                    .theme-light {
+                        --auth-button-bg: #f8f9fa;
+                        --auth-button-color: #212529;
+                        --auth-button-border: 1px solid #dee2e6;
+                        --auth-button-hover-bg: #e9ecef;
+                        --auth-button-brand-color: #e91e63;
                     }
 
                     .theme-outline {
                         --auth-button-bg: transparent;
-                        --auth-button-color: #4285f4;
-                        --auth-button-border: 2px solid #4285f4;
-                        --auth-button-brand-color: #ff6b35;
-                    }
-
-                    .theme-outline:hover {
-                        --auth-button-hover-bg: #4285f4;
-                        --auth-button-color: white;
+                        --auth-button-color: #6c757d;
+                        --auth-button-border: 2px solid #6c757d;
+                        --auth-button-brand-color: #ff69b4;
+                        --auth-button-hover-bg: #6c757d;
+                        --auth-button-hover-color: white;
                     }
                 </style>
                 

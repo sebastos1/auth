@@ -1,5 +1,5 @@
 use crate::{templates::RegisterTemplate};
-use crate::util::get_country_from_ip;
+use crate::handler::geoloc::get_country_from_ip;
 use askama::Template;
 use axum::{
     extract::{ConnectInfo, Query, State}, response::{Html, Redirect}, Form

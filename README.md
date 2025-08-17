@@ -16,6 +16,7 @@ There are convenience imports for a button to use.
 ### 1. Import and call the sign in button
 
 ```html
+<link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://auth.sjallabong.eu/sdk"></script>
 
 <body>

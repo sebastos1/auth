@@ -1,48 +1,70 @@
-<!DOCTYPE html>
-<html>
+{% extends "base.html" %}
 
-<head>
-    <title>Log in</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-</head>
+{% block title %}Login - sjallabong{% endblock %}
 
-<body>
+{% block content %}
+<div class="auth-header">
     <h1>Log in</h1>
-    <p><strong>{{ client_id }}</strong> wants to access your account</p>
-    <p>Requested permissions: {{ scopes }}</p>
+    <div class="auth-subtitle">{{ client_id }}: {{ scopes }}</div>
+</div>
 
-    {% if let Some(general_error) = errors.get("general") %}
-    <div style="color: red; margin-bottom: 1rem;">
-        {{ general_error }}
+{% if let Some(general_error) = errors.get("general") %}
+<div class="error">{{ general_error }}</div>
+{% endif %}
+
+<form method="post" action="/authorize" novalidate>
+    <input type="hidden" name="client_id" value="{{ client_id }}">
+    <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
+    <input type="hidden" name="state" value="{{ state }}">
+    <input type="hidden" name="scopes" value="{{ scopes }}">
+
+    <div class="form-group">
+        <input type="text" name="login" value="{{ login }}" class="form-input" placeholder="Username"
+            autocomplete="username">
+        {% if let Some(login_error) = errors.get("login") %}
+        <div class="error">{{ login_error }}</div>
+        {% endif %}
     </div>
-    {% endif %}
 
-    <form method="post" action="/authorize" novalidate>
-        <input type="hidden" name="client_id" value="{{ client_id }}">
-        <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
-        <input type="hidden" name="state" value="{{ state }}">
-        <input type="hidden" name="scopes" value="{{ scopes }}">
-
-        <div>
-            <label>Username or Email:</label>
-            <input type="text" name="login" value="{{ login }}">
-            {% if let Some(login_error) = errors.get("login") %}
-            <div style="color: red; font-size: 0.9em;">{{ login_error }}</div>
-            {% endif %}
+    <div class="form-group">
+        <div class="password-container">
+            <input type="password" id="password" name="password" class="form-input" placeholder="Password"
+                autocomplete="current-password">
+            <button type="button" class="password-toggle" onclick="togglePassword()">Show</button>
         </div>
+        {% if let Some(password_error) = errors.get("password") %}
+        <div class="error">{{ password_error }}</div>
+        {% endif %}
+    </div>
 
-        <div>
-            <label>Password:</label>
-            <input type="password" name="password">
-            {% if let Some(password_error) = errors.get("password") %}
-            <div style="color: red; font-size: 0.9em;">{{ password_error }}</div>
-            {% endif %}
-        </div>
+    <button type="submit" class="form-button">Log in</button>
+</form>
 
-        <button type="submit">Login & Authorize</button>
-    </form>
+<script>
+    function togglePassword() {
+        const passwordInput = document.getElementById('password');
+        const toggleButton = document.querySelector('.password-toggle');
 
-    <p><a href="/register?client_id={{ client_id }}&redirect_uri={{ redirect_uri }}&scope={{ scopes }}&state={{ state }}">Don't have an account? Register here</a></p>
-</body>
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            toggleButton.textContent = 'Hide';
+        } else {
+            passwordInput.type = 'password';
+            toggleButton.textContent = 'Show';
+        }
+    }
+</script>
+{% endblock %}
 
-</html>
+{% block secondary %}
+<div class="auth-divider">
+    <span>or</span>
+</div>
+
+<div class="auth-secondary">
+    <a href="/register?client_id={{ client_id }}&redirect_uri={{ redirect_uri }}&scope={{ scopes }}&state={{ state }}"
+        style="text-decoration: none;">
+        <button type="button" class="form-button">Register</button>
+    </a>
+</div>
+{% endblock %}
