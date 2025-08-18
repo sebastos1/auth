@@ -1,5 +1,5 @@
 [package]
-name = "homepage"
+name = "auth"
 version = "0.1.0"
 edition = "2024"
 
@@ -22,7 +22,7 @@ serde_json = "1.0.142"
 thiserror = "2.0.14"
 tokio = { version = "1.47.1", features = ["full"] }
 tower = "0.5.2"
-tower-http = { version = "0.6.6", features = ["fs"] }
+tower-http = { version = "0.6.6", features = ["fs", "cors"] }
 tracing-subscriber = "0.3.19"
 url = "2.5.4"
 urlencoding = "2.1.3"

@@ -128,7 +128,7 @@
             this.shadowRoot.innerHTML = `
                 <style>
                     button {
-                        background: var(--auth-button-bg, #343a40);
+                        background: var(--auth-button-bg, #23262aff);
                         color: var(--auth-button-color, #f8f9fa);
                         border: none;
                         border-radius: 4px;

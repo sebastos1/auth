@@ -217,6 +217,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
+name = "auth"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "askama",
+ "axum",
+ "base64",
+ "bcrypt",
+ "chrono",
+ "dotenv",
+ "env_logger",
+ "log",
+ "maxminddb",
+ "rand 0.9.2",
+ "reqwest",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing-subscriber",
+ "url",
+ "urlencoding",
+ "uuid",
+ "validator",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1005,36 +1035,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "589533453244b0995c858700322199b2becb13b627df2851f64a2775d024abcf"
 dependencies = [
  "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "homepage"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "askama",
- "axum",
- "base64",
- "bcrypt",
- "chrono",
- "dotenv",
- "env_logger",
- "log",
- "maxminddb",
- "rand 0.9.2",
- "reqwest",
- "sea-orm",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tower",
- "tower-http",
- "tracing-subscriber",
- "url",
- "urlencoding",
- "uuid",
- "validator",
 ]
 
 [[package]]

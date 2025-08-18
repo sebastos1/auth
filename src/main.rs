@@ -5,6 +5,7 @@ use axum::{
 };
 use std::net::SocketAddr;
 use tower::ServiceBuilder;
+use tower_http::cors::{CorsLayer, Any};
 
 mod db;
 mod entity;
@@ -19,6 +20,12 @@ use entity::*;
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
     env_logger::init();
+
+    // make this more secure todo
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
 
     let db = db::init_db().await?;
 
@@ -49,7 +56,8 @@ async fn main() -> Result<()> {
         .route("/geolocate", get(handler::geoloc::get))
         .with_state(db)
         .layer(axum_mw::from_fn(middleware::log::log_request))
-        .layer(ServiceBuilder::new().into_inner());
+        .layer(ServiceBuilder::new().into_inner())
+        .layer(cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3001));
     println!("Listening on {}", addr);
