@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
-use sea_orm::*;
 use serde::{Deserialize, Serialize};
+use sea_orm::*;
 
 const EXPIRATION_DAYS: i64 = 30;
 
@@ -31,3 +31,51 @@ impl ActiveModelBehavior for ActiveModel {
 }
 
 crate::impl_verify!(Token);
+
+impl Entity {
+    pub async fn create(
+        access_token: &str,
+        client_id: &str, 
+        user_id: &str,
+        scopes: &str,
+        db: &impl ConnectionTrait,
+    ) -> Result<String, DbErr> {
+        let refresh_token = crate::util::generate_random_string(64);
+
+        let model = ActiveModel {
+            token: Set(refresh_token.clone()),
+            access_token: Set(access_token.to_string()),
+            client_id: Set(client_id.to_string()),
+            user_id: Set(user_id.to_string()),
+            scopes: Set(scopes.to_string()),
+            ..Default::default()
+        };
+        model.insert(db).await?;
+        Ok(refresh_token)
+    }
+
+    pub async fn refresh_tokens(
+        refresh_token: &str,
+        client_id: &str,
+        db: &DatabaseConnection,
+    ) -> Result<(String, String, String), DbErr> {
+        let txn = db.begin().await?;
+        
+        let refresh_record = Self::verify(refresh_token, &txn).await?.ok_or(DbErr::RecordNotFound(String::new()))?;
+        
+        if refresh_record.client_id != client_id {
+            return Err(DbErr::RecordNotFound(String::new()));
+        }
+        
+        // delete old
+        crate::token::access::Entity::delete_by_id(&refresh_record.access_token).exec(&txn).await?;
+        Self::delete_by_id(refresh_token).exec(&txn).await?;
+        
+        // new
+        let access_token = crate::token::access::Entity::create(client_id, &refresh_record.user_id, &refresh_record.scopes, &txn).await?;
+        let refresh_token = Self::create(&access_token, client_id, &refresh_record.user_id, &refresh_record.scopes, &txn).await?;
+        
+        txn.commit().await?;
+        Ok((access_token, refresh_token, refresh_record.scopes))
+    }
+}

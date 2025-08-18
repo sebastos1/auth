@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
-use sea_orm::*;
 use serde::{Deserialize, Serialize};
+use sea_orm::*;
 
 const EXPIRATION_MIN: i64 = 10;
 
@@ -34,3 +34,35 @@ impl ActiveModelBehavior for ActiveModel {
 }
 
 crate::impl_verify!(Code);
+
+impl Entity {
+    pub async fn exchange_for_tokens(
+        code: &str,
+        client_id: &str,
+        redirect_uri: &str,
+        code_verifier: &str,
+        db: &DatabaseConnection,
+    ) -> Result<(String, String, String), DbErr> { // (access_token, refresh_token, scopes)
+        let txn = db.begin().await?;
+        
+        // validation
+        let auth_code = Self::verify(code, &txn).await?.ok_or(DbErr::RecordNotFound(String::new()))?;
+        
+        if auth_code.client_id != client_id || auth_code.redirect_uri != redirect_uri {
+            return Err(DbErr::RecordNotFound(String::new()));
+        }
+        
+        if !crate::util::verify_pkce(code_verifier, &auth_code.code_challenge) {
+            return Err(DbErr::RecordNotFound(String::new()));
+        }
+        
+        let access_token = crate::token::access::Entity::create(client_id, &auth_code.user_id, &auth_code.scopes, &txn).await?;
+        let refresh_token = crate::token::refresh::Entity::create(&access_token, client_id, &auth_code.user_id, &auth_code.scopes, &txn).await?;
+        
+        // delete auth code
+        Self::delete_by_id(code).exec(&txn).await?;
+        
+        txn.commit().await?;
+        Ok((access_token, refresh_token, auth_code.scopes))
+    }
+}

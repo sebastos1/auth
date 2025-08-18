@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use sea_orm::*;
 use serde::{Deserialize, Serialize};
 
-const EXPIRATION_MIN: i64 = 60;
+const EXPIRATION_MIN: i64 = 60 * 24;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "access_tokens")]
@@ -30,3 +30,23 @@ impl ActiveModelBehavior for ActiveModel {
 }
 
 crate::impl_verify!(Token);
+
+impl Entity {
+    pub async fn create(
+        client_id: &str, 
+        user_id: &str,
+        scopes: &str,
+        db: &impl ConnectionTrait,
+    ) -> Result<String, DbErr> {
+        let access_token = crate::util::generate_random_string(64);
+        let model = ActiveModel {
+            token: Set(access_token.clone()),
+            client_id: Set(client_id.to_string()),
+            user_id: Set(user_id.to_string()),
+            scopes: Set(scopes.to_string()),
+            ..Default::default()
+        };
+        model.insert(db).await?;
+        Ok(access_token)
+    }
+}

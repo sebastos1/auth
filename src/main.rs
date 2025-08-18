@@ -14,11 +14,11 @@ mod middleware;
 mod templates;
 mod util;
 mod clients;
-use entity::*;
+use entity::{user, client, token};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
     env_logger::init();
 
     // make this more secure todo
@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
         .layer(cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3001));
-    println!("Listening on {}", addr);
+    println!("Listening on {addr}");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;

@@ -6,10 +6,13 @@ pub mod refresh;
 macro_rules! impl_verify {
     ($column:ident) => {
         impl Entity {
-            pub async fn verify(
+            pub async fn verify<C>(
                 token: &str,
-                db: &sea_orm::DatabaseConnection,
-            ) -> Result<Option<Model>, sea_orm::DbErr> {
+                db: &C,
+            ) -> Result<Option<Model>, sea_orm::DbErr> 
+            where
+                C: sea_orm::ConnectionTrait,
+            {
                 Self::find()
                     .filter(Column::$column.eq(token))
                     .filter(Column::ExpiresAt.gt(chrono::Utc::now()))

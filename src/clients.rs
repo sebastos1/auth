@@ -43,7 +43,7 @@ pub async fn create_clients(db: &DatabaseConnection) -> Result<()> {
         };
 
         client.insert(db).await?;
-        println!("Created client: {} / {}", client_id, client_secret);
+        println!("Created client: {client_id} / {client_secret}");
     }
 
     Ok(())

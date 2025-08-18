@@ -63,7 +63,7 @@ async fn authenticate_user(form: &LoginForm, db: &DatabaseConnection) -> Result<
         Ok(Some(user)) => user,
         Ok(None) => return Err("Invalid username or password".to_string()),
         Err(e) => {
-            error!("Database error during login: {}", e);
+            error!("Database error during login: {e}");
             return Err("Server error. Please try again.".to_string());
         }
     };
@@ -72,7 +72,7 @@ async fn authenticate_user(form: &LoginForm, db: &DatabaseConnection) -> Result<
         Ok(true) => Ok(user),
         Ok(false) => Err("Invalid username or password".to_string()),
         Err(e) => {
-            error!("Password verification error: {}", e);
+            error!("Password verification error: {e}");
             Err("Server error. Please try again.".to_string())
         }
     }
@@ -82,8 +82,6 @@ pub async fn get(
     Query(params): Query<AuthorizeQuery>,
     State(db): State<DatabaseConnection>,
 ) -> Result<Html<String>, StatusCode> {
-    println!("Authorize request: {:?}", params);
-
     if params.code_challenge_method != "S256" {
         error!("Invalid code_challenge_method: {}", params.code_challenge_method);
         return Err(StatusCode::BAD_REQUEST);
@@ -97,7 +95,7 @@ pub async fn get(
         Ok(Some(client)) => client,
         Ok(None) => return Err(StatusCode::BAD_REQUEST),
         Err(e) => {
-            error!("Database error finding client: {}", e);
+            error!("Database error finding client: {e}");
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
@@ -107,13 +105,13 @@ pub async fn get(
         .as_deref()
         .unwrap_or("openid")
         .split_whitespace()
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
 
     let allowed_scopes = match client.get_allowed_scopes() {
         Ok(scopes) => scopes,
         Err(e) => {
-            error!("Error getting allowed scopes: {}", e);
+            error!("Error getting allowed scopes: {e}");
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
@@ -186,7 +184,7 @@ pub async fn post(State(db): State<DatabaseConnection>, Form(form): Form<LoginFo
     };
 
     if let Err(e) = auth_code.insert(&db).await {
-        error!("Failed to create auth code: {}", e);
+        error!("Failed to create auth code: {e}");
         let mut errors = HashMap::new();
         errors.insert("general".to_string(), "Server error. Please try again.".to_string());
         return Err(render_error(errors));
@@ -195,7 +193,7 @@ pub async fn post(State(db): State<DatabaseConnection>, Form(form): Form<LoginFo
     let mut redirect_url = match url::Url::parse(&form.redirect_uri) {
         Ok(url) => url,
         Err(e) => {
-            error!("Invalid redirect URI: {}", e);
+            error!("Invalid redirect URI: {e}");
             let mut errors = HashMap::new();
             errors.insert("general".to_string(), "Invalid redirect URI".to_string());
             return Err(render_error(errors));

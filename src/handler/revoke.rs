@@ -12,42 +12,34 @@ pub async fn post(
     State(db): State<DatabaseConnection>,
     Form(req): Form<RevokeRequest>,
 ) -> StatusCode {
-    let _client = match crate::client::Entity::find_by_id(&req.client_id)
+    let Ok(Some(_client)) = crate::client::Entity::find_by_id(&req.client_id)
         .one(&db)
-        .await
-    {
-        Ok(Some(client)) => client,
-        _ => return StatusCode::BAD_REQUEST,
-    };
+        .await else { return StatusCode::BAD_REQUEST };
 
     // revoke as access token first
-    if let Ok(Some(token)) = crate::token::access::Entity::find_by_id(&req.token).one(&db).await {
-        if token.client_id == req.client_id {
-            let _ = crate::token::access::Entity::delete_by_id(&req.token).exec(&db).await;
+    if let Ok(Some(token)) = crate::token::access::Entity::find_by_id(&req.token).one(&db).await && token.client_id == req.client_id {
+        let _ = crate::token::access::Entity::delete_by_id(&req.token).exec(&db).await;
 
-            if let Ok(Some(refresh_token)) = crate::token::refresh::Entity::find()
-                .filter(crate::token::refresh::Column::AccessToken.eq(&req.token))
-                .one(&db)
-                .await
-            {
-                let _ = crate::token::refresh::Entity::delete_by_id(&refresh_token.token)
-                    .exec(&db)
-                    .await;
-            }
-
-            return StatusCode::OK;
+        if let Ok(Some(refresh_token)) = crate::token::refresh::Entity::find()
+            .filter(crate::token::refresh::Column::AccessToken.eq(&req.token))
+            .one(&db)
+            .await
+        {
+            let _ = crate::token::refresh::Entity::delete_by_id(&refresh_token.token)
+                .exec(&db)
+                .await;
         }
+
+        return StatusCode::OK;
     }
 
     // revoke as refresh token
-    if let Ok(Some(token)) = crate::token::refresh::Entity::find_by_id(&req.token).one(&db).await {
-        if token.client_id == req.client_id {
-            let _ = crate::token::refresh::Entity::delete_by_id(&req.token).exec(&db).await;
-            let _ = crate::token::access::Entity::delete_by_id(&token.access_token)
-                .exec(&db)
-                .await;
-            return StatusCode::OK;
-        }
+    if let Ok(Some(token)) = crate::token::refresh::Entity::find_by_id(&req.token).one(&db).await && token.client_id == req.client_id {
+        let _ = crate::token::refresh::Entity::delete_by_id(&req.token).exec(&db).await;
+        let _ = crate::token::access::Entity::delete_by_id(&token.access_token)
+            .exec(&db)
+            .await;
+        return StatusCode::OK;
     }
 
     StatusCode::OK

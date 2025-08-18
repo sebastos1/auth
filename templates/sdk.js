@@ -11,6 +11,7 @@ class Oauth2Client {
             clientId: config.clientId,
             authServer: config.authServer || "https://auth.sjallabong.eu",
             scope: config.scope || "openid profile",
+            redirectUri: config.redirectUri || `${config.authServer}/success`,
         }
     }
 
@@ -75,7 +76,7 @@ class Oauth2Client {
 
             const params = new URLSearchParams({
                 client_id: config.clientId,
-                redirect_uri: `${config.authServer}/success`,
+                redirect_uri: config.redirectUri,
                 scope: config.scope,
                 state: state,
                 code_challenge: codeChallenge,
@@ -112,8 +113,11 @@ class Oauth2Client {
     }
 
     static setupHandlers(popup, options) {
+        const config = Oauth2Client.getConfig();
+
         // listens for messages from /success
         const messageHandler = (event) => {
+            if (event.origin !== config.authServer) return;
             if (event.data.type === 'AUTH_SUCCESS') {
                 Oauth2Client.handleCallback(event.data, options);
                 window.removeEventListener('message', messageHandler);
@@ -167,7 +171,7 @@ class Oauth2Client {
                 grant_type: 'authorization_code',
                 client_id: config.clientId,
                 code,
-                redirect_uri: `${config.authServer}/success`,
+                redirect_uri: config.redirectUri,
                 code_verifier: codeVerifier
             })
         });

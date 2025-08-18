@@ -40,7 +40,7 @@ pub async fn get(
             None
         },
         country: if auth_user.has_profile() {
-            auth_user.user.country.clone()
+            auth_user.user.country
         } else {
             None
         },

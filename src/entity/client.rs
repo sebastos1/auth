@@ -9,7 +9,7 @@ pub struct Model {
     pub client_id: String,
     pub client_secret: String,
     pub name: String,
-    pub redirect_uris: String,
+    pub redirect_uris: String, // unused since it's popups
     pub allowed_scopes: String,
     pub is_trusted: bool,
     pub created_at: DateTime<Utc>,
@@ -29,10 +29,6 @@ impl ActiveModelBehavior for ActiveModel {
 }
 
 impl Model {
-    pub fn _get_redirect_uris(&self) -> Result<Vec<String>, serde_json::Error> {
-        serde_json::from_str(&self.redirect_uris)
-    }
-
     pub fn get_allowed_scopes(&self) -> Result<Vec<String>, serde_json::Error> {
         serde_json::from_str(&self.allowed_scopes)
     }

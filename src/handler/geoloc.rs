@@ -20,11 +20,11 @@ pub async fn get_country_from_ip(ip_str: &str) -> Option<String> {
         ip_str
     };
 
-    println!("Geolocating IP: {}", ip_str);
+    println!("Geolocating IP: {ip_str}");
 
     let ip = IpAddr::from_str(ip_str).ok()?;
     let reader = maxminddb::Reader::open_readfile("GeoLite2-Country.mmdb").ok()?;
     
     let country_data = reader.lookup::<maxminddb::geoip2::Country>(ip).ok()??;
-    country_data.country?.iso_code.map(|code| code.to_string())
+    country_data.country?.iso_code.map(std::string::ToString::to_string)
 }

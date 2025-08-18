@@ -97,7 +97,7 @@ async fn validate_database(req: &CreateUserRequest, db: &DatabaseConnection) -> 
         }
         Ok(None) => {}
         Err(e) => {
-            error!("Database error during user lookup: {}", e);
+            error!("Database error during user lookup: {e}");
             errors.insert("general".to_string(), "Server error. Please try again.".to_string());
         }
     }
@@ -141,7 +141,7 @@ pub async fn post(
     let password_hash = match hash(req.password, DEFAULT_COST) {
         Ok(hash) => hash,
         Err(e) => {
-            error!("Password hashing failed: {}", e);
+            error!("Password hashing failed: {e}");
             let mut errors = HashMap::new();
             errors.insert(
                 "general".to_string(),
@@ -176,7 +176,7 @@ pub async fn post(
             Ok(Redirect::to(&redirect_url))
         }
         Err(e) => {
-            error!("Failed to create user: {}", e);
+            error!("Failed to create user: {e}");
             let mut errors = HashMap::new();
             errors.insert(
                 "general".to_string(),

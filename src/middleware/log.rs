@@ -10,7 +10,7 @@ pub async fn log_request(request: Request, next: Next) -> Response {
         .and_then(|h| h.to_str().ok())
         .unwrap_or("unknown");
 
-    info!("{} {} from {}", method, uri, host);
+    info!("{method} {uri} from {host}");
 
     next.run(request).await
 }
