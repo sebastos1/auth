@@ -3,7 +3,7 @@ services:
     build: .
     environment:
       - RUST_LOG=info
-      - AUTH_SERVER_URL="https://auth.sjallabong.eu"
+      - AUTH_SERVER_URL=https://auth.sjallabong.eu
     ports:
       - "3001:3001" # debug
     expose:
