@@ -15,6 +15,8 @@ pub struct RegisterTemplate {
     pub redirect_uri: String, 
     pub state: String,
     pub scopes: String,
+    pub code_challenge: String,
+    pub code_challenge_method: String,
 }
 
 #[derive(Template)]
@@ -25,6 +27,8 @@ pub struct LoginTemplate {
     pub redirect_uri: String,
     pub state: String,
     pub scopes: String,
+    pub code_challenge: String,
+    pub code_challenge_method: String,
 
     // preserve
     pub login: String,
@@ -33,6 +37,4 @@ pub struct LoginTemplate {
 // injects the auth server url into the sdk so it knows where to send requests
 #[derive(Template)]
 #[template(path = "sdk.js", escape = "none")]
-pub struct SdkTemplate {
-    pub auth_server_url: String,
-}
+pub struct SdkTemplate;

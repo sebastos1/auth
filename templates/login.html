@@ -17,6 +17,8 @@
     <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
     <input type="hidden" name="state" value="{{ state }}">
     <input type="hidden" name="scopes" value="{{ scopes }}">
+    <input type="hidden" name="code_challenge" value="{{ code_challenge }}">
+    <input type="hidden" name="code_challenge_method" value="{{ code_challenge_method }}">
 
     <div class="form-group">
         <input type="text" name="login" value="{{ login }}" class="form-input" placeholder="Username"
@@ -43,7 +45,7 @@
 </div>
 
 <div class="auth-secondary">
-    <a href="/register?client_id={{ client_id }}&redirect_uri={{ redirect_uri }}&scope={{ scopes }}&state={{ state }}"
+    <a href="/register?client_id={{ client_id }}&redirect_uri={{ redirect_uri }}&scope={{ scopes }}&state={{ state }}&code_challenge={{ code_challenge }}&code_challenge_method={{ code_challenge_method }}"
         style="text-decoration: none;">
         <button type="button" class="form-button">Register</button>
     </a>

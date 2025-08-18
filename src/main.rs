@@ -31,15 +31,9 @@ async fn main() -> Result<()> {
 
     let app = Router::new()
         .route("/", get(|| async { "hello from auth" }))
-        .merge(
-            Router::new()
-                .route("/token", post(handler::token::post))
-                .route("/revoke", post(handler::revoke::post))
-                .layer(axum_mw::from_fn_with_state(
-                    db.clone(),
-                    middleware::client::client_auth_middleware,
-                )),
-        )
+        .route("/token", post(handler::token::post))
+        .route("/revoke", post(handler::revoke::post))
+        
         .merge(
             Router::new()
                 .route("/userinfo", get(handler::userinfo::get))

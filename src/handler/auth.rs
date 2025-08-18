@@ -15,21 +15,25 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 pub struct LoginForm {
-    login: String, // username, email optionally
+    login: String, // username, email optionally?
     password: String,
+
     client_id: String,
     redirect_uri: String,
     state: Option<String>,
     scopes: String,
+    code_challenge: String,
+    code_challenge_method: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct AuthorizeQuery {
-    response_type: String,
     client_id: String,
     redirect_uri: String,
     scope: Option<String>,
-    state: Option<String>,
+    state: String,
+    code_challenge: String,
+    code_challenge_method: String,
 }
 
 fn validate_login_format(form: &LoginForm) -> HashMap<String, String> {
@@ -78,7 +82,14 @@ pub async fn get(
     Query(params): Query<AuthorizeQuery>,
     State(db): State<DatabaseConnection>,
 ) -> Result<Html<String>, StatusCode> {
-    if params.response_type != "code" {
+    println!("Authorize request: {:?}", params);
+
+    if params.code_challenge_method != "S256" {
+        error!("Invalid code_challenge_method: {}", params.code_challenge_method);
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    if params.code_challenge.is_empty() || params.state.is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -116,10 +127,13 @@ pub async fn get(
     let template = LoginTemplate {
         client_id: params.client_id,
         redirect_uri: params.redirect_uri,
-        state: params.state.unwrap_or_default(),
+        state: params.state,
         scopes: requested_scopes.join(" "),
         errors: HashMap::new(),
         login: String::new(),
+
+        code_challenge: params.code_challenge,
+        code_challenge_method: params.code_challenge_method,
     };
 
     template
@@ -137,6 +151,8 @@ pub async fn post(State(db): State<DatabaseConnection>, Form(form): Form<LoginFo
             scopes: form.scopes.clone(),
             errors,
             login: form.login.clone(),
+            code_challenge: form.code_challenge.clone(),
+            code_challenge_method: form.code_challenge_method.clone(),
         };
         Html(template.render().unwrap())
     };
@@ -164,6 +180,8 @@ pub async fn post(State(db): State<DatabaseConnection>, Form(form): Form<LoginFo
         user_id: Set(user.id),
         redirect_uri: Set(form.redirect_uri.clone()),
         scopes: Set(form.scopes.clone()),
+        code_challenge: Set(form.code_challenge.clone()),
+        code_challenge_method: Set(form.code_challenge_method.clone()),
         ..Default::default()
     };
 

@@ -18,8 +18,10 @@ pub struct CreateUserRequest {
     password: String,
     client_id: String,
     redirect_uri: String,
-    state: Option<String>,
+    state: String,
     scopes: String,
+    code_challenge: String,
+    code_challenge_method: String,
 }
 
 #[derive(Deserialize)]
@@ -27,7 +29,9 @@ pub struct RegisterQuery {
     client_id: Option<String>,
     redirect_uri: Option<String>,
     scope: Option<String>,
-    state: Option<String>,
+    state: String,
+    code_challenge: String,
+    code_challenge_method: String,
 }
 
 // this needs the client id and allat in order to login after
@@ -38,8 +42,10 @@ pub async fn get(Query(oauth_params): Query<RegisterQuery>) -> Result<Html<Strin
         username: String::new(),
         client_id: oauth_params.client_id.unwrap_or_default(),
         redirect_uri: oauth_params.redirect_uri.unwrap_or_default(),
-        state: oauth_params.state.unwrap_or_default(),
+        state: oauth_params.state,
         scopes: oauth_params.scope.unwrap_or_default(),
+        code_challenge: oauth_params.code_challenge,
+        code_challenge_method: oauth_params.code_challenge_method,
     };
     
     template.render().map(Html).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
@@ -112,8 +118,10 @@ pub async fn post(
             username: req.username.clone(),
             client_id: req.client_id.clone(),
             redirect_uri: req.redirect_uri.clone(),
-            state: req.state.clone().unwrap_or_default(),
+            state: req.state.clone(),
             scopes: req.scopes.clone(),
+            code_challenge: req.code_challenge.clone(),
+            code_challenge_method: req.code_challenge_method.clone(),
         };
         Html(template.render().unwrap())
     };
@@ -157,11 +165,13 @@ pub async fn post(
         Ok(_) => {
             info!("Registered user: {}", req.username);
             let redirect_url = format!(
-                "/authorize?response_type=code&client_id={}&redirect_uri={}&scope={}&state={}",
+                "/authorize?client_id={}&redirect_uri={}&scope={}&state={}&code_challenge={}&code_challenge_method={}",
                 urlencoding::encode(&req.client_id),
                 urlencoding::encode(&req.redirect_uri), 
                 urlencoding::encode(&req.scopes),
-                urlencoding::encode(&req.state.unwrap_or_default())
+                urlencoding::encode(&req.state),
+                urlencoding::encode(&req.code_challenge),
+                urlencoding::encode(&req.code_challenge_method)
             );
             Ok(Redirect::to(&redirect_url))
         }

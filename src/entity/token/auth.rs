@@ -15,6 +15,9 @@ pub struct Model {
     pub scopes: String,
     pub expires_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
+
+    pub code_challenge: String,
+    pub code_challenge_method: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
