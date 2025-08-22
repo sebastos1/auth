@@ -44,5 +44,4 @@ pub struct SdkTemplate;
 pub struct ErrorTemplate {
     pub status_code: u16,
     pub message: String,
-    pub details: Option<String>,
 }

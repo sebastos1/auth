@@ -10,7 +10,7 @@ use sea_orm::*;
 use serde::Deserialize;
 use tracing::info;
 use anyhow::Context;
-use crate::error::{AppError, OptionExt};
+use crate::error::{AppError, HtmlError, OptionExt};
 
 #[derive(Deserialize, Debug)]
 pub struct LoginForm {
@@ -71,7 +71,7 @@ pub async fn get(
     Query(params): Query<AuthorizeQuery>,
     State(db): State<DatabaseConnection>,
     headers: HeaderMap,
-) -> Result<Html<String>, AppError> {
+) -> Result<Html<String>, HtmlError> {
     info!(
         client_id = %params.client_id,
         scopes = ?params.scope,
@@ -79,11 +79,11 @@ pub async fn get(
     );
 
     if params.code_challenge_method != "S256" {
-        return Err(AppError::bad_request(format!("Invalid code challenge method: {}", params.code_challenge_method)));
+        return Err(AppError::bad_request(format!("Invalid code challenge method: {}", params.code_challenge_method)).into());
     }
 
     if params.code_challenge.is_empty() || params.state.is_empty() {
-        return Err(AppError::bad_request("Missing code challenge or state"));
+        return Err(AppError::bad_request("Missing code challenge or state").into());
     }
 
     let client = crate::util::validate_client_origin(&params.client_id, &headers, &db).await?;
@@ -96,7 +96,7 @@ pub async fn get(
     let allowed_scopes = client.get_allowed_scopes()?;
     for scope in &requested_scopes {
         if !allowed_scopes.contains(scope) {
-            return Err(AppError::bad_request(format!("Scope '{}' not allowed for client '{}'", scope, params.client_id)));
+            return Err(AppError::bad_request(format!("Scope '{}' not allowed for client '{}'", scope, params.client_id)).into());
         }
     }
 
@@ -117,8 +117,8 @@ pub async fn get(
 pub async fn post(
     State(db): State<DatabaseConnection>,
     Form(form): Form<LoginForm>
-) -> Result<FormResponse<Redirect>, AppError> {
-    let render_error = |errors: HashMap<String, String>| -> Result<FormResponse<Redirect>, AppError> {
+) -> Result<FormResponse<Redirect>, HtmlError> {
+    let render_error = |errors: HashMap<String, String>| -> Result<FormResponse<Redirect>, HtmlError> {
         let template = LoginTemplate {
             client_id: form.client_id.clone(),
             redirect_uri: form.redirect_uri.clone(),
@@ -145,7 +145,7 @@ pub async fn post(
             errors.insert("general".to_string(), msg);
             return render_error(errors);
         }
-        Err(e) => return Err(e),
+        Err(e) => return Err(e.into()),
     };
     info!("User authenticated: {}", user.username);
 

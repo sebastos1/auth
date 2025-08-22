@@ -1,9 +1,8 @@
 use sha2::{Sha256, Digest};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ring::rand::{SystemRandom, SecureRandom};
-use crate::{client, error::{AppError, OptionExt}};
+use crate::{client, error::{AppError, OptionExt}, IS_PRODUCTION};
 use sea_orm::*;
-use tracing::debug;
 
 pub fn generate_random_string(length: usize) -> String {
     let rng = SystemRandom::new();
@@ -28,10 +27,9 @@ pub async fn validate_client_origin(
     let client = client::Entity::find_by_id(client_id).one(db).await?
         .or_bad_request(format!("Invalid client_id: {}", client_id))?;
     
-    // #[cfg(debug_assertions)]
-    // {
-    //     return Ok(client);
-    // }
+    if !*IS_PRODUCTION {
+        return Ok(client);
+    }
 
     let origin = headers.get("origin").and_then(|h| h.to_str().ok());
     let forwarded_host = headers.get("x-forwarded-host").and_then(|h| h.to_str().ok());

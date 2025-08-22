@@ -7,7 +7,7 @@ use bcrypt::{DEFAULT_COST, hash};
 use sea_orm::*;
 use serde::Deserialize;
 use std::{collections::HashMap, net::SocketAddr};
-use crate::error::{AppError, FormResponse};
+use crate::error::{AppError, FormResponse, HtmlError};
 
 #[derive(Deserialize)]
 pub struct CreateUserRequest {
@@ -33,7 +33,7 @@ pub struct RegisterQuery {
 }
 
 // this needs the client id and allat in order to login after
-pub async fn get(Query(oauth_params): Query<RegisterQuery>) -> Result<Html<String>, AppError> {
+pub async fn get(Query(oauth_params): Query<RegisterQuery>) -> Result<Html<String>, HtmlError> {
     let template = RegisterTemplate {
         errors: HashMap::new(),
         email: String::new(),
@@ -95,8 +95,8 @@ pub async fn post(
     headers: HeaderMap,
     State(db): State<DatabaseConnection>,
     Form(req): Form<CreateUserRequest>,
-) -> Result<FormResponse<Redirect>, AppError> {
-    let render_error = |errors: HashMap<String, String>| -> Result<FormResponse<Redirect>, AppError> {
+) -> Result<FormResponse<Redirect>, HtmlError> {
+    let render_error = |errors: HashMap<String, String>| -> Result<FormResponse<Redirect>, HtmlError> {
         let template = RegisterTemplate {
             errors,
             email: req.email.clone(),
