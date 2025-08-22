@@ -78,4 +78,27 @@ impl Entity {
         txn.commit().await?;
         Ok((access_token, refresh_token, refresh_record.scopes))
     }
+
+    pub async fn revoke(
+        token: &str,
+        client_id: &str,
+        db: &DatabaseConnection,
+    ) -> Result<bool, DbErr> {
+        let Some(refresh_token) = Self::find_by_id(token).one(db).await? else {
+            return Ok(false);
+        };
+
+        if refresh_token.client_id != client_id {
+            return Ok(false);
+        }
+
+        let txn = db.begin().await?;
+
+        // delete both access and refresh tokens
+        Self::delete_by_id(token).exec(&txn).await?;
+        crate::token::access::Entity::delete_by_id(&refresh_token.access_token).exec(&txn).await?;
+
+        txn.commit().await?;
+        Ok(true)
+    }
 }

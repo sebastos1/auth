@@ -1,6 +1,6 @@
-use anyhow::Result;
-use axum::{Extension, Json, http::StatusCode};
+use axum::{Extension, Json};
 use serde::Serialize;
+use crate::error::AppError;
 
 #[derive(Serialize)]
 pub struct UserInfoResponse {
@@ -17,9 +17,9 @@ pub struct UserInfoResponse {
 
 pub async fn get(
     Extension(auth_user): Extension<crate::middleware::user::AuthenticatedUser>,
-) -> Result<Json<UserInfoResponse>, StatusCode> {
+) -> Result<Json<UserInfoResponse>, AppError> {
     if !auth_user.has_openid() {
-        return Err(StatusCode::FORBIDDEN);
+        return Err(AppError::forbidden("OpenID scope required"));
     }
 
     let response = UserInfoResponse {

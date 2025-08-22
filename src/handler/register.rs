@@ -1,15 +1,13 @@
 use crate::{templates::RegisterTemplate};
-use crate::handler::geoloc::get_country_from_ip;
+use crate::handler::geoloc::{get_country_from_ip, get_forwarded_ip};
 use askama::Template;
-use axum::{
-    extract::{ConnectInfo, Query, State}, response::{Html, Redirect}, Form
-};
+use axum::http::HeaderMap;
+use axum::{extract::{ConnectInfo, Query, State}, response::{Html, Redirect}, Form};
 use bcrypt::{DEFAULT_COST, hash};
-use log::{error, info};
-use reqwest::StatusCode;
 use sea_orm::*;
 use serde::Deserialize;
 use std::{collections::HashMap, net::SocketAddr};
+use crate::error::{AppError, FormResponse};
 
 #[derive(Deserialize)]
 pub struct CreateUserRequest {
@@ -35,7 +33,7 @@ pub struct RegisterQuery {
 }
 
 // this needs the client id and allat in order to login after
-pub async fn get(Query(oauth_params): Query<RegisterQuery>) -> Result<Html<String>, StatusCode> {
+pub async fn get(Query(oauth_params): Query<RegisterQuery>) -> Result<Html<String>, AppError> {
     let template = RegisterTemplate {
         errors: HashMap::new(),
         email: String::new(),
@@ -47,8 +45,7 @@ pub async fn get(Query(oauth_params): Query<RegisterQuery>) -> Result<Html<Strin
         code_challenge: oauth_params.code_challenge,
         code_challenge_method: oauth_params.code_challenge_method,
     };
-    
-    template.render().map(Html).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+    Ok(Html(template.render()?))
 }
 
 fn validate_format(req: &CreateUserRequest) -> HashMap<String, String> {
@@ -59,59 +56,47 @@ fn validate_format(req: &CreateUserRequest) -> HashMap<String, String> {
     }
 
     if req.username.len() < 3 || req.username.len() > 30 {
-        errors.insert(
-            "username".to_string(),
-            "Username must be between 3 and 30 characters".to_string(),
-        );
+        errors.insert("username".to_string(), "Username must be between 3 and 30 characters".to_string());
     }
 
     if req.password.len() < 8 {
-        errors.insert(
-            "password".to_string(),
-            "Password must be at least 8 characters".to_string(),
-        );
+        errors.insert("password".to_string(), "Password must be at least 8 characters".to_string());
     }
 
     errors
 }
 
-async fn validate_database(req: &CreateUserRequest, db: &DatabaseConnection) -> HashMap<String, String> {
+async fn validate_database(req: &CreateUserRequest, db: &DatabaseConnection) -> Result<HashMap<String, String>, AppError> {
     let mut errors = HashMap::new();
 
-    match crate::user::Entity::find()
+    let existing = crate::user::Entity::find()
         .filter(
             Condition::any()
                 .add(crate::user::Column::Email.eq(&req.email))
                 .add(crate::user::Column::Username.eq(&req.username)),
         )
-        .one(db)
-        .await
-    {
-        Ok(Some(existing)) => {
-            if existing.email == req.email {
-                errors.insert("email".to_string(), "This email is already registered".to_string());
-            }
-            if existing.username == req.username {
-                errors.insert("username".to_string(), "This username is already taken".to_string());
-            }
+        .one(db).await?;
+
+    if let Some(existing_user) = existing {
+        if existing_user.email == req.email {
+            errors.insert("email".to_string(), "This email is already registered".to_string());
         }
-        Ok(None) => {}
-        Err(e) => {
-            error!("Database error during user lookup: {e}");
-            errors.insert("general".to_string(), "Server error. Please try again.".to_string());
+        if existing_user.username == req.username {
+            errors.insert("username".to_string(), "This username is already taken".to_string());
         }
     }
 
-    errors
+    Ok(errors)
 }
 
 // redirects if successful, returns html form the form if fails
 pub async fn post(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     State(db): State<DatabaseConnection>,
     Form(req): Form<CreateUserRequest>,
-) -> Result<Redirect, Html<String>> {
-    let render_error = |errors: HashMap<String, String>| {
+) -> Result<FormResponse<Redirect>, AppError> {
+    let render_error = |errors: HashMap<String, String>| -> Result<FormResponse<Redirect>, AppError> {
         let template = RegisterTemplate {
             errors,
             email: req.email.clone(),
@@ -123,35 +108,26 @@ pub async fn post(
             code_challenge: req.code_challenge.clone(),
             code_challenge_method: req.code_challenge_method.clone(),
         };
-        Html(template.render().unwrap())
+        let rendered = template.render()?;
+        Ok(FormResponse::ValidationErrors(Html(rendered)))
     };
 
     // check format fast first
     let format_errors = validate_format(&req);
     if !format_errors.is_empty() {
-        return Err(render_error(format_errors));
+        return render_error(format_errors);
     }
 
     // db check
-    let db_errors = validate_database(&req, &db).await;
+    let db_errors = validate_database(&req, &db).await?;
     if !db_errors.is_empty() {
-        return Err(render_error(db_errors));
+        return render_error(db_errors);
     }
 
-    let password_hash = match hash(req.password, DEFAULT_COST) {
-        Ok(hash) => hash,
-        Err(e) => {
-            error!("Password hashing failed: {e}");
-            let mut errors = HashMap::new();
-            errors.insert(
-                "general".to_string(),
-                "Registration failed. Please try again.".to_string(),
-            );
-            return Err(render_error(errors));
-        }
-    };
+    let password_hash = hash(req.password, DEFAULT_COST)?;
 
-    let country = get_country_from_ip(&addr.ip().to_string()).await;
+    let ip = get_forwarded_ip(&headers).unwrap_or_else(|| addr.ip().to_string());
+    let country = get_country_from_ip(&ip).await;
 
     let user = crate::user::ActiveModel {
         email: Set(req.email.clone()),
@@ -160,29 +136,18 @@ pub async fn post(
         country: Set(country),
         ..Default::default()
     };
+    
+    user.insert(&db).await?;
 
-    match user.insert(&db).await {
-        Ok(_) => {
-            info!("Registered user: {}", req.username);
-            let redirect_url = format!(
-                "/authorize?client_id={}&redirect_uri={}&scope={}&state={}&code_challenge={}&code_challenge_method={}",
-                urlencoding::encode(&req.client_id),
-                urlencoding::encode(&req.redirect_uri), 
-                urlencoding::encode(&req.scopes),
-                urlencoding::encode(&req.state),
-                urlencoding::encode(&req.code_challenge),
-                urlencoding::encode(&req.code_challenge_method)
-            );
-            Ok(Redirect::to(&redirect_url))
-        }
-        Err(e) => {
-            error!("Failed to create user: {e}");
-            let mut errors = HashMap::new();
-            errors.insert(
-                "general".to_string(),
-                "Registration failed. Please try again.".to_string(),
-            );
-            Err(render_error(errors))
-        }
-    }
+    let redirect_url = format!(
+        "/authorize?client_id={}&redirect_uri={}&scope={}&state={}&code_challenge={}&code_challenge_method={}",
+        urlencoding::encode(&req.client_id),
+        urlencoding::encode(&req.redirect_uri), 
+        urlencoding::encode(&req.scopes),
+        urlencoding::encode(&req.state),
+        urlencoding::encode(&req.code_challenge),
+        urlencoding::encode(&req.code_challenge_method)
+    );
+    
+    Ok(FormResponse::Success(Redirect::to(&redirect_url)))
 }

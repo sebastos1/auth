@@ -49,4 +49,32 @@ impl Entity {
         model.insert(db).await?;
         Ok(access_token)
     }
+
+    pub async fn revoke(
+        token: &str,
+        client_id: &str,
+        db: &DatabaseConnection,
+    ) -> Result<bool, DbErr> {
+        let Some(access_token) = Self::find_by_id(token).one(db).await? else {
+            return Ok(false);
+        };
+
+        if access_token.client_id != client_id {
+            return Ok(false);
+        }
+
+        let txn = db.begin().await?;
+
+        Self::delete_by_id(token).exec(&txn).await?;
+
+        // remove associated refresh token
+        if let Some(refresh) = crate::token::refresh::Entity::find()
+            .filter(crate::token::refresh::Column::AccessToken.eq(token))
+            .one(&txn).await? {
+            crate::token::refresh::Entity::delete_by_id(&refresh.token).exec(&txn).await?;
+        }
+
+        txn.commit().await?;
+        Ok(true)
+    }
 }

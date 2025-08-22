@@ -1,7 +1,8 @@
-use axum::{Extension, Json, extract::State, http::StatusCode};
+use axum::{Extension, Json, extract::State};
 use chrono::Utc;
 use sea_orm::*;
 use serde::{Deserialize, Serialize};
+use crate::error::{AppError, OptionExt};
 
 #[derive(Deserialize)]
 pub struct UpdateUserRequest {
@@ -26,16 +27,14 @@ pub async fn patch(
     Extension(auth_user): Extension<crate::middleware::user::AuthenticatedUser>,
     State(db): State<DatabaseConnection>,
     Json(req): Json<UpdateUserRequest>,
-) -> Result<Json<UpdateUserResponse>, StatusCode> {
+) -> Result<Json<UpdateUserResponse>, AppError> {
     if req.user_id != auth_user.user.id && !auth_user.user.is_admin {
-        return Err(StatusCode::FORBIDDEN);
+        return Err(AppError::forbidden("Insufficient permissions to update this user"));
     }
 
     let user = crate::user::Entity::find_by_id(&req.user_id)
-        .one(&db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .one(&db).await?
+        .or_not_found(format!("User not found: {}", req.user_id))?;
 
     let mut user_update: crate::user::ActiveModel = user.into();
 
@@ -70,9 +69,7 @@ pub async fn patch(
     user_update.updated_at = Set(Utc::now());
 
     let updated_user = user_update
-        .update(&db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .update(&db).await?;
 
     Ok(Json(UpdateUserResponse {
         success: true,

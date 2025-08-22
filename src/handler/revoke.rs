@@ -1,6 +1,8 @@
 use axum::{Form, extract::State, http::StatusCode};
 use sea_orm::*;
 use serde::Deserialize;
+use crate::error::{AppError, OptionExt};
+use crate::token::{access, refresh};
 
 #[derive(Deserialize)]
 pub struct RevokeRequest {
@@ -11,36 +13,15 @@ pub struct RevokeRequest {
 pub async fn post(
     State(db): State<DatabaseConnection>,
     Form(req): Form<RevokeRequest>,
-) -> StatusCode {
-    let Ok(Some(_client)) = crate::client::Entity::find_by_id(&req.client_id)
-        .one(&db)
-        .await else { return StatusCode::BAD_REQUEST };
+) -> Result<StatusCode, AppError> {
+    crate::client::Entity::find_by_id(&req.client_id)
+        .one(&db).await?
+        .or_bad_request(format!("Invalid client_id: {}", req.client_id))?;
 
-    // revoke as access token first
-    if let Ok(Some(token)) = crate::token::access::Entity::find_by_id(&req.token).one(&db).await && token.client_id == req.client_id {
-        let _ = crate::token::access::Entity::delete_by_id(&req.token).exec(&db).await;
-
-        if let Ok(Some(refresh_token)) = crate::token::refresh::Entity::find()
-            .filter(crate::token::refresh::Column::AccessToken.eq(&req.token))
-            .one(&db)
-            .await
-        {
-            let _ = crate::token::refresh::Entity::delete_by_id(&refresh_token.token)
-                .exec(&db)
-                .await;
-        }
-
-        return StatusCode::OK;
+    if access::Entity::revoke(&req.token, &req.client_id, &db).await? {
+        return Ok(StatusCode::OK);
     }
 
-    // revoke as refresh token
-    if let Ok(Some(token)) = crate::token::refresh::Entity::find_by_id(&req.token).one(&db).await && token.client_id == req.client_id {
-        let _ = crate::token::refresh::Entity::delete_by_id(&req.token).exec(&db).await;
-        let _ = crate::token::access::Entity::delete_by_id(&token.access_token)
-            .exec(&db)
-            .await;
-        return StatusCode::OK;
-    }
-
-    StatusCode::OK
+    refresh::Entity::revoke(&req.token, &req.client_id, &db).await?;
+    Ok(StatusCode::OK)
 }

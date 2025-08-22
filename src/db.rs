@@ -1,11 +1,16 @@
 use anyhow::Result;
 use sea_orm::*;
+use crate::IS_PRODUCTION;
 
 pub async fn init_db() -> Result<DatabaseConnection> {
-    let db = Database::connect("sqlite:auth.db?mode=rwc").await?;
-
+    let database_url = if *IS_PRODUCTION {
+        std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in prod")
+    } else {
+        std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:auth_dev.db?mode=rwc".to_string())
+    };
+    
+    let db = Database::connect(&database_url).await?;
     let backend = db.get_database_backend();
-
     let schema = Schema::new(backend);
     let stmt = schema.create_table_from_entity(crate::user::Entity);
     let sql = backend

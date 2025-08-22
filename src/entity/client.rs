@@ -7,11 +7,10 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub client_id: String,
-    pub client_secret: String,
     pub name: String,
-    pub redirect_uris: String, // unused since it's popups
+    pub redirect_uris: String,
+    pub authorized_origins: String,
     pub allowed_scopes: String,
-    pub is_trusted: bool,
     pub created_at: DateTime<Utc>,
 }
 
@@ -22,7 +21,6 @@ impl ActiveModelBehavior for ActiveModel {
     fn new() -> Self {
         Self {
             created_at: Set(chrono::Utc::now()),
-            is_trusted: Set(false),
             ..ActiveModelTrait::default()
         }
     }
@@ -31,5 +29,9 @@ impl ActiveModelBehavior for ActiveModel {
 impl Model {
     pub fn get_allowed_scopes(&self) -> Result<Vec<String>, serde_json::Error> {
         serde_json::from_str(&self.allowed_scopes)
+    }
+
+    pub fn get_authorized_origins(&self) -> Result<Vec<String>, serde_json::Error> {
+        serde_json::from_str(&self.authorized_origins)
     }
 }

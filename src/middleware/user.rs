@@ -1,10 +1,6 @@
-use axum::{
-    extract::{Request, State},
-    http::{HeaderMap, StatusCode},
-    middleware::Next,
-    response::Response,
-};
+use axum::{extract::{Request, State}, http::HeaderMap, middleware::Next, response::Response};
 use sea_orm::*;
+use crate::error::{AppError, OptionExt};
 
 #[derive(Debug, Clone)]
 pub struct AuthenticatedUser {
@@ -30,32 +26,21 @@ impl AuthenticatedUser {
     }
 }
 
-fn extract_bearer_token(headers: &axum::http::HeaderMap) -> Result<&str, StatusCode> {
-    headers
-        .get("authorization")
-        .and_then(|h| h.to_str().ok())
-        .and_then(|h| h.strip_prefix("Bearer "))
-        .ok_or(StatusCode::UNAUTHORIZED)
-}
-
 pub async fn user_auth_middleware(
     State(db): State<DatabaseConnection>,
     headers: HeaderMap,
     mut request: Request,
     next: Next,
-) -> Result<Response, StatusCode> {
-    let token = extract_bearer_token(&headers).map_err(|_| StatusCode::UNAUTHORIZED)?;
+) -> Result<Response, AppError> {
+    let token = headers
+        .get("authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .or_unauthorized("Bearer token required")?;
 
-    let access_token = crate::token::access::Entity::verify(token, &db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let access_token = crate::token::access::Entity::verify(token, &db).await?.or_unauthorized("Invalid or expired token")?;
 
-    let user = crate::user::Entity::find_by_id(&access_token.user_id)
-        .one(&db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let user = crate::user::Entity::find_by_id(&access_token.user_id).one(&db).await?.or_unauthorized("User not found")?;
 
     let auth_user = AuthenticatedUser { user, access_token };
 
