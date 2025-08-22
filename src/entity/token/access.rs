@@ -33,7 +33,7 @@ crate::impl_verify!(Token);
 
 impl Entity {
     pub async fn create(
-        client_id: &str, 
+        client_id: &str,
         user_id: &str,
         scopes: &str,
         db: &impl ConnectionTrait,
@@ -50,11 +50,7 @@ impl Entity {
         Ok(access_token)
     }
 
-    pub async fn revoke(
-        token: &str,
-        client_id: &str,
-        db: &DatabaseConnection,
-    ) -> Result<bool, DbErr> {
+    pub async fn revoke(token: &str, client_id: &str, db: &DatabaseConnection) -> Result<bool, DbErr> {
         let Some(access_token) = Self::find_by_id(token).one(db).await? else {
             return Ok(false);
         };
@@ -70,8 +66,12 @@ impl Entity {
         // remove associated refresh token
         if let Some(refresh) = crate::token::refresh::Entity::find()
             .filter(crate::token::refresh::Column::AccessToken.eq(token))
-            .one(&txn).await? {
-            crate::token::refresh::Entity::delete_by_id(&refresh.token).exec(&txn).await?;
+            .one(&txn)
+            .await?
+        {
+            crate::token::refresh::Entity::delete_by_id(&refresh.token)
+                .exec(&txn)
+                .await?;
         }
 
         txn.commit().await?;

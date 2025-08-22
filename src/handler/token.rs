@@ -1,7 +1,10 @@
-use axum::{extract::State, http::HeaderMap, Form, Json};
+use crate::{
+    AppState,
+    error::{AppError, OptionExt},
+};
+use axum::{Form, Json, extract::State, http::HeaderMap};
 use sea_orm::*;
 use serde::{Deserialize, Serialize};
-use crate::{error::{AppError, OptionExt}, AppState};
 
 #[derive(Deserialize)]
 pub struct TokenRequest {
@@ -42,11 +45,11 @@ async fn handle_authorization_code(
 ) -> Result<Json<TokenResponse>, AppError> {
     let code = form.code.or_bad_request("Missing parameter: code")?;
     let redirect_uri = form.redirect_uri.or_bad_request("Missing redirect URI")?;
-    
-    let (access_token, refresh_token, scopes) = crate::token::auth::Entity::exchange_for_tokens(
-        &code, &form.client_id, &redirect_uri, &form.code_verifier, db
-    ).await?;
-    
+
+    let (access_token, refresh_token, scopes) =
+        crate::token::auth::Entity::exchange_for_tokens(&code, &form.client_id, &redirect_uri, &form.code_verifier, db)
+            .await?;
+
     Ok(Json(TokenResponse {
         access_token,
         token_type: "Bearer".to_string(),
@@ -56,18 +59,11 @@ async fn handle_authorization_code(
     }))
 }
 
-async fn handle_refresh_token(
-    db: &DatabaseConnection,
-    form: TokenRequest,
-) -> Result<Json<TokenResponse>, AppError> {
+async fn handle_refresh_token(db: &DatabaseConnection, form: TokenRequest) -> Result<Json<TokenResponse>, AppError> {
     let refresh_token = form.refresh_token.or_bad_request("Missing refresh token")?;
 
-    let (access_token, new_refresh_token, scopes) = crate::token::refresh::Entity::refresh_tokens(
-        &refresh_token,
-        &form.client_id,
-        db,
-    )
-    .await?;
+    let (access_token, new_refresh_token, scopes) =
+        crate::token::refresh::Entity::refresh_tokens(&refresh_token, &form.client_id, db).await?;
 
     Ok(Json(TokenResponse {
         access_token,

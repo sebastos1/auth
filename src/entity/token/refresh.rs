@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use sea_orm::*;
+use serde::{Deserialize, Serialize};
 
 const EXPIRATION_DAYS: i64 = 30;
 
@@ -35,7 +35,7 @@ crate::impl_verify!(Token);
 impl Entity {
     pub async fn create(
         access_token: &str,
-        client_id: &str, 
+        client_id: &str,
         user_id: &str,
         scopes: &str,
         db: &impl ConnectionTrait,
@@ -60,30 +60,39 @@ impl Entity {
         db: &DatabaseConnection,
     ) -> Result<(String, String, String), DbErr> {
         let txn = db.begin().await?;
-        
-        let refresh_record = Self::verify(refresh_token, &txn).await?.ok_or(DbErr::RecordNotFound(String::new()))?;
-        
+
+        let refresh_record = Self::verify(refresh_token, &txn)
+            .await?
+            .ok_or(DbErr::RecordNotFound(String::new()))?;
+
         if refresh_record.client_id != client_id {
             return Err(DbErr::RecordNotFound(String::new()));
         }
-        
+
         // delete old
-        crate::token::access::Entity::delete_by_id(&refresh_record.access_token).exec(&txn).await?;
+        crate::token::access::Entity::delete_by_id(&refresh_record.access_token)
+            .exec(&txn)
+            .await?;
         Self::delete_by_id(refresh_token).exec(&txn).await?;
-        
+
         // new
-        let access_token = crate::token::access::Entity::create(client_id, &refresh_record.user_id, &refresh_record.scopes, &txn).await?;
-        let refresh_token = Self::create(&access_token, client_id, &refresh_record.user_id, &refresh_record.scopes, &txn).await?;
-        
+        let access_token =
+            crate::token::access::Entity::create(client_id, &refresh_record.user_id, &refresh_record.scopes, &txn)
+                .await?;
+        let refresh_token = Self::create(
+            &access_token,
+            client_id,
+            &refresh_record.user_id,
+            &refresh_record.scopes,
+            &txn,
+        )
+        .await?;
+
         txn.commit().await?;
         Ok((access_token, refresh_token, refresh_record.scopes))
     }
 
-    pub async fn revoke(
-        token: &str,
-        client_id: &str,
-        db: &DatabaseConnection,
-    ) -> Result<bool, DbErr> {
+    pub async fn revoke(token: &str, client_id: &str, db: &DatabaseConnection) -> Result<bool, DbErr> {
         let Some(refresh_token) = Self::find_by_id(token).one(db).await? else {
             return Ok(false);
         };
@@ -96,7 +105,9 @@ impl Entity {
 
         // delete both access and refresh tokens
         Self::delete_by_id(token).exec(&txn).await?;
-        crate::token::access::Entity::delete_by_id(&refresh_token.access_token).exec(&txn).await?;
+        crate::token::access::Entity::delete_by_id(&refresh_token.access_token)
+            .exec(&txn)
+            .await?;
 
         txn.commit().await?;
         Ok(true)

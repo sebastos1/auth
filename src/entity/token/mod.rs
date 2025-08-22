@@ -6,10 +6,7 @@ pub mod refresh;
 macro_rules! impl_verify {
     ($column:ident) => {
         impl Entity {
-            pub async fn verify<C>(
-                token: &str,
-                db: &C,
-            ) -> Result<Option<Model>, sea_orm::DbErr> 
+            pub async fn verify<C>(token: &str, db: &C) -> Result<Option<Model>, sea_orm::DbErr>
             where
                 C: sea_orm::ConnectionTrait,
             {

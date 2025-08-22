@@ -1,6 +1,6 @@
+use crate::IS_PRODUCTION;
 use anyhow::Result;
 use sea_orm::*;
-use crate::IS_PRODUCTION;
 
 pub async fn init_db() -> Result<DatabaseConnection> {
     let database_url = if *IS_PRODUCTION {
@@ -8,7 +8,7 @@ pub async fn init_db() -> Result<DatabaseConnection> {
     } else {
         std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:auth_dev.db?mode=rwc".to_string())
     };
-    
+
     let db = Database::connect(&database_url).await?;
     let backend = db.get_database_backend();
     let schema = Schema::new(backend);

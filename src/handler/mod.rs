@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod geoloc;
 pub mod register;
 pub mod revoke;
 pub mod sdk;
@@ -6,4 +7,3 @@ pub mod success;
 pub mod token;
 pub mod update;
 pub mod userinfo;
-pub mod geoloc;

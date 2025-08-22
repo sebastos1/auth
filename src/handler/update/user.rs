@@ -1,8 +1,11 @@
+use crate::{
+    AppState,
+    error::{AppError, OptionExt},
+};
 use axum::{Extension, Json, extract::State};
 use chrono::Utc;
 use sea_orm::*;
 use serde::{Deserialize, Serialize};
-use crate::{error::{AppError, OptionExt}, AppState};
 
 #[derive(Deserialize)]
 pub struct UpdateUserRequest {
@@ -33,7 +36,8 @@ pub async fn patch(
     }
 
     let user = crate::user::Entity::find_by_id(&req.user_id)
-        .one(&app_state.db).await?
+        .one(&app_state.db)
+        .await?
         .or_not_found(format!("User not found: {}", req.user_id))?;
 
     let mut user_update: crate::user::ActiveModel = user.into();

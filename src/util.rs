@@ -1,11 +1,14 @@
-use std::{collections::HashMap, sync::RwLock, time::UNIX_EPOCH};
-use std::time::SystemTime;
-use sha2::{Sha256, Digest};
+use crate::{
+    IS_PRODUCTION, client,
+    error::{AppError, OptionExt},
+};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use ring::rand::{SystemRandom, SecureRandom};
-use crate::{client, error::{AppError, OptionExt}, IS_PRODUCTION};
-use sea_orm::*;
 use redis::AsyncCommands;
+use ring::rand::{SecureRandom, SystemRandom};
+use sea_orm::*;
+use sha2::{Digest, Sha256};
+use std::time::SystemTime;
+use std::{collections::HashMap, sync::RwLock, time::UNIX_EPOCH};
 
 pub fn generate_random_string(length: usize) -> String {
     let rng = SystemRandom::new();
@@ -27,16 +30,18 @@ pub async fn validate_client_origin(
     headers: &axum::http::HeaderMap,
     db: &DatabaseConnection,
 ) -> Result<client::Model, AppError> {
-    let client = client::Entity::find_by_id(client_id).one(db).await?
+    let client = client::Entity::find_by_id(client_id)
+        .one(db)
+        .await?
         .or_bad_request(format!("Invalid client_id: {}", client_id))?;
-    
+
     if !*IS_PRODUCTION {
         return Ok(client);
     }
 
     let origin = headers.get("origin").and_then(|h| h.to_str().ok());
     let forwarded_host = headers.get("x-forwarded-host").and_then(|h| h.to_str().ok());
-    
+
     let effective_origin = forwarded_host
         .map(|h| format!("https://{}", h))
         .or_else(|| origin.map(String::from))
@@ -44,7 +49,10 @@ pub async fn validate_client_origin(
 
     let authorized_origins = client.get_authorized_origins()?;
     if !authorized_origins.contains(&effective_origin) {
-        return Err(AppError::forbidden(format!("Origin not authorized: {}", effective_origin)));
+        return Err(AppError::forbidden(format!(
+            "Origin not authorized: {}",
+            effective_origin
+        )));
     }
 
     Ok(client)
@@ -56,7 +64,7 @@ static CSRF_TOKENS: LazyLock<RwLock<HashMap<String, u64>>> = LazyLock::new(|| Rw
 
 pub async fn generate_csrf_token() -> String {
     let token = generate_random_string(32);
-    
+
     if *IS_PRODUCTION {
         if let Ok(mut conn) = crate::get_redis_connection().await {
             let key = format!("csrf:{}", token);
@@ -68,13 +76,13 @@ pub async fn generate_csrf_token() -> String {
             tokens.insert(token.clone(), expiry);
         }
     }
-    
+
     token
 }
 
 pub async fn validate_csrf_token(token: &str) -> bool {
     if *IS_PRODUCTION {
-         if let Ok(mut conn) = crate::get_redis_connection().await {
+        if let Ok(mut conn) = crate::get_redis_connection().await {
             let key = format!("csrf:{}", token);
             let result: Result<String, _> = conn.get_del(key).await;
             return result.is_ok();

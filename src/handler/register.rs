@@ -1,13 +1,17 @@
 use crate::AppState;
-use crate::{templates::RegisterTemplate};
+use crate::error::{AppError, FormResponse, HtmlError};
 use crate::handler::geoloc::{get_country_from_ip, get_forwarded_ip};
+use crate::templates::RegisterTemplate;
 use askama::Template;
 use axum::http::HeaderMap;
-use axum::{extract::{ConnectInfo, Query, State}, response::{Html, Redirect}, Form};
+use axum::{
+    Form,
+    extract::{ConnectInfo, Query, State},
+    response::{Html, Redirect},
+};
 use sea_orm::*;
 use serde::Deserialize;
 use std::{collections::HashMap, net::SocketAddr};
-use crate::error::{AppError, FormResponse, HtmlError};
 
 #[derive(Deserialize)]
 pub struct CreateUserRequest {
@@ -58,17 +62,26 @@ fn validate_format(req: &CreateUserRequest) -> HashMap<String, String> {
     }
 
     if req.username.len() < 3 || req.username.len() > 30 {
-        errors.insert("username".to_string(), "Username must be between 3 and 30 characters".to_string());
+        errors.insert(
+            "username".to_string(),
+            "Username must be between 3 and 30 characters".to_string(),
+        );
     }
 
     if req.password.len() < 8 {
-        errors.insert("password".to_string(), "Password must be at least 8 characters".to_string());
+        errors.insert(
+            "password".to_string(),
+            "Password must be at least 8 characters".to_string(),
+        );
     }
 
     errors
 }
 
-async fn validate_database(req: &CreateUserRequest, db: &DatabaseConnection) -> Result<HashMap<String, String>, AppError> {
+async fn validate_database(
+    req: &CreateUserRequest,
+    db: &DatabaseConnection,
+) -> Result<HashMap<String, String>, AppError> {
     let mut errors = HashMap::new();
 
     let existing = crate::user::Entity::find()
@@ -77,7 +90,8 @@ async fn validate_database(req: &CreateUserRequest, db: &DatabaseConnection) -> 
                 .add(crate::user::Column::Email.eq(&req.email))
                 .add(crate::user::Column::Username.eq(&req.username)),
         )
-        .one(db).await?;
+        .one(db)
+        .await?;
 
     if let Some(existing_user) = existing {
         if existing_user.email == req.email {
@@ -145,18 +159,18 @@ pub async fn post(
         country: Set(country),
         ..Default::default()
     };
-    
+
     user.insert(&app_state.db).await?;
 
     let redirect_url = format!(
         "/authorize?client_id={}&redirect_uri={}&scope={}&state={}&code_challenge={}&code_challenge_method={}",
         urlencoding::encode(&form.client_id),
-        urlencoding::encode(&form.redirect_uri), 
+        urlencoding::encode(&form.redirect_uri),
         urlencoding::encode(&form.scopes),
         urlencoding::encode(&form.state),
         urlencoding::encode(&form.code_challenge),
         urlencoding::encode(&form.code_challenge_method)
     );
-    
+
     Ok(FormResponse::Success(Redirect::to(&redirect_url)))
 }

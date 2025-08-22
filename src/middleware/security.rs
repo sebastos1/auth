@@ -1,5 +1,10 @@
+use axum::{
+    extract::Request,
+    http::{HeaderValue, Method, header},
+    middleware::Next,
+    response::Response,
+};
 use std::time::Duration;
-use axum::{extract::Request, http::{Method, header, HeaderValue}, middleware::Next, response::Response};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 pub fn cors_layer() -> CorsLayer {
@@ -23,14 +28,11 @@ pub fn cors_layer() -> CorsLayer {
     }
 }
 
-pub async fn headers(
-    request: Request,
-    next: Next,
-) -> Response {
+pub async fn headers(request: Request, next: Next) -> Response {
     let mut response = next.run(request).await;
-    
+
     let headers = response.headers_mut();
-    
+
     let csp = if *crate::IS_PRODUCTION {
         "default-src 'self'; \
         script-src 'self' 'unsafe-inline'; \
@@ -45,16 +47,16 @@ pub async fn headers(
         form-action 'self'; \
         frame-ancestors 'none'"
     };
-    
-    headers.insert(
-        header::CONTENT_SECURITY_POLICY,
-        csp.parse().unwrap(),
-    );
-    
+
+    headers.insert(header::CONTENT_SECURITY_POLICY, csp.parse().unwrap());
+
     headers.insert("x-frame-options", "DENY".parse().unwrap());
     headers.insert("x-content-type-options", "nosniff".parse().unwrap());
     headers.insert("x-xss-protection", "1; mode=block".parse().unwrap());
-    headers.insert(header::REFERRER_POLICY, "strict-origin-when-cross-origin".parse().unwrap());
+    headers.insert(
+        header::REFERRER_POLICY,
+        "strict-origin-when-cross-origin".parse().unwrap(),
+    );
 
     // Only add HSTS in production
     if *crate::IS_PRODUCTION {
@@ -63,6 +65,6 @@ pub async fn headers(
             "max-age=31536000; includeSubDomains".parse().unwrap(),
         );
     }
-    
+
     response
 }

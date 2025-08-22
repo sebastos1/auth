@@ -12,7 +12,7 @@ pub struct RegisterTemplate {
     pub username: String,
 
     pub client_id: String,
-    pub redirect_uri: String, 
+    pub redirect_uri: String,
     pub state: String,
     pub scopes: String,
     pub code_challenge: String,

@@ -1,16 +1,19 @@
-use std::collections::HashMap;
 use crate::AppState;
-use crate::{error::FormResponse, templates::LoginTemplate};
+use crate::error::{AppError, HtmlError, OptionExt};
 use crate::util::generate_random_string;
+use crate::{error::FormResponse, templates::LoginTemplate};
+use anyhow::Context;
 use askama::Template;
 use axum::{
-    extract::{Query, State}, http::HeaderMap, response::{Html, Redirect}, Form
+    Form,
+    extract::{Query, State},
+    http::HeaderMap,
+    response::{Html, Redirect},
 };
 use sea_orm::*;
 use serde::Deserialize;
+use std::collections::HashMap;
 use tracing::info;
-use anyhow::Context;
-use crate::error::{AppError, HtmlError, OptionExt};
 
 #[derive(Deserialize, Debug)]
 pub struct LoginForm {
@@ -51,8 +54,11 @@ fn validate_login_format(form: &LoginForm) -> HashMap<String, String> {
 }
 
 async fn authenticate_user(form: &LoginForm, app_state: &AppState) -> Result<crate::user::Model, AppError> {
-    let user = crate::user::Entity::find().filter(crate::user::Column::Username.eq(&form.login))
-        .one(&app_state.db).await?.or_unauthorized("Invalid username or password")?;
+    let user = crate::user::Entity::find()
+        .filter(crate::user::Column::Username.eq(&form.login))
+        .one(&app_state.db)
+        .await?
+        .or_unauthorized("Invalid username or password")?;
 
     if app_state.password.verify(&form.password, &user.password_hash)? {
         Ok(user)
@@ -73,7 +79,11 @@ pub async fn get(
     );
 
     if params.code_challenge_method != "S256" {
-        return Err(AppError::bad_request(format!("Invalid code challenge method: {}", params.code_challenge_method)).into());
+        return Err(AppError::bad_request(format!(
+            "Invalid code challenge method: {}",
+            params.code_challenge_method
+        ))
+        .into());
     }
 
     if params.code_challenge.is_empty() || params.state.is_empty() {
@@ -83,14 +93,22 @@ pub async fn get(
     let client = crate::util::validate_client_origin(&params.client_id, &headers, &app_state.db).await?;
     info!("Client origin validated successfully");
 
-    let requested_scopes: Vec<String> = params.scope
-        .as_deref().unwrap_or("openid")
-        .split_whitespace().map(String::from).collect();
+    let requested_scopes: Vec<String> = params
+        .scope
+        .as_deref()
+        .unwrap_or("openid")
+        .split_whitespace()
+        .map(String::from)
+        .collect();
 
     let allowed_scopes = client.get_allowed_scopes()?;
     for scope in &requested_scopes {
         if !allowed_scopes.contains(scope) {
-            return Err(AppError::bad_request(format!("Scope '{}' not allowed for client '{}'", scope, params.client_id)).into());
+            return Err(AppError::bad_request(format!(
+                "Scope '{}' not allowed for client '{}'",
+                scope, params.client_id
+            ))
+            .into());
         }
     }
 
@@ -111,7 +129,7 @@ pub async fn get(
 
 pub async fn post(
     State(app_state): State<AppState>,
-    Form(form): Form<LoginForm>
+    Form(form): Form<LoginForm>,
 ) -> Result<FormResponse<Redirect>, HtmlError> {
     let render_error = async |errors: HashMap<String, String>| -> Result<FormResponse<Redirect>, HtmlError> {
         let template = LoginTemplate {
@@ -163,7 +181,10 @@ pub async fn post(
         ..Default::default()
     };
 
-    auth_code.insert(&app_state.db).await.context("Failed to create auth code")?;
+    auth_code
+        .insert(&app_state.db)
+        .await
+        .context("Failed to create auth code")?;
 
     let mut redirect_url = url::Url::parse(&form.redirect_uri).context("Invalid redirect URI")?;
 

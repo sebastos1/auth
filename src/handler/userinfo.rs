@@ -1,6 +1,6 @@
+use crate::error::AppError;
 use axum::{Extension, Json};
 use serde::Serialize;
-use crate::error::AppError;
 
 #[derive(Serialize)]
 pub struct UserInfoResponse {
