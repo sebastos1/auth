@@ -1,6 +1,5 @@
 use askama::Template;
-use axum::http::Response;
-use reqwest::header;
+use axum::http::{header, Response};
 use anyhow::Context;
 use crate::error::AppError;
 

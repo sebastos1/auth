@@ -1,8 +1,11 @@
+use std::{collections::HashMap, sync::RwLock, time::UNIX_EPOCH};
+use std::time::SystemTime;
 use sha2::{Sha256, Digest};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ring::rand::{SystemRandom, SecureRandom};
 use crate::{client, error::{AppError, OptionExt}, IS_PRODUCTION};
 use sea_orm::*;
+use redis::AsyncCommands;
 
 pub fn generate_random_string(length: usize) -> String {
     let rng = SystemRandom::new();
@@ -45,4 +48,45 @@ pub async fn validate_client_origin(
     }
 
     Ok(client)
+}
+
+// in memory csrf store, debug only
+use std::sync::LazyLock;
+static CSRF_TOKENS: LazyLock<RwLock<HashMap<String, u64>>> = LazyLock::new(|| RwLock::new(HashMap::new()));
+
+pub async fn generate_csrf_token() -> String {
+    let token = generate_random_string(32);
+    
+    if *IS_PRODUCTION {
+        if let Ok(mut conn) = crate::get_redis_connection().await {
+            let key = format!("csrf:{}", token);
+            let _: Result<(), _> = conn.set_ex(key, "1", 3600).await; // 1 hour expiry
+        }
+    } else {
+        let expiry = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + 3600;
+        if let Ok(mut tokens) = CSRF_TOKENS.write() {
+            tokens.insert(token.clone(), expiry);
+        }
+    }
+    
+    token
+}
+
+pub async fn validate_csrf_token(token: &str) -> bool {
+    if *IS_PRODUCTION {
+         if let Ok(mut conn) = crate::get_redis_connection().await {
+            let key = format!("csrf:{}", token);
+            let result: Result<String, _> = conn.get_del(key).await;
+            return result.is_ok();
+        }
+        false
+    } else {
+        let mut tokens = match CSRF_TOKENS.write() {
+            Ok(tokens) => tokens,
+            Err(_) => return false,
+        };
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        tokens.retain(|_, &mut expiry| expiry > now);
+        tokens.remove(token).is_some()
+    }
 }

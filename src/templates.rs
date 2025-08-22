@@ -17,6 +17,8 @@ pub struct RegisterTemplate {
     pub scopes: String,
     pub code_challenge: String,
     pub code_challenge_method: String,
+
+    pub csrf_token: String,
 }
 
 #[derive(Template)]
@@ -32,6 +34,8 @@ pub struct LoginTemplate {
 
     // preserve
     pub login: String,
+
+    pub csrf_token: String,
 }
 
 // injects the auth server url into the sdk so it knows where to send requests

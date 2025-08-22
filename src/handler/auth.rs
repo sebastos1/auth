@@ -1,11 +1,11 @@
 use std::collections::HashMap;
+use crate::AppState;
 use crate::{error::FormResponse, templates::LoginTemplate};
 use crate::util::generate_random_string;
 use askama::Template;
 use axum::{
     extract::{Query, State}, http::HeaderMap, response::{Html, Redirect}, Form
 };
-use bcrypt::verify;
 use sea_orm::*;
 use serde::Deserialize;
 use tracing::info;
@@ -14,7 +14,7 @@ use crate::error::{AppError, HtmlError, OptionExt};
 
 #[derive(Deserialize, Debug)]
 pub struct LoginForm {
-    login: String, // username, email optionally?
+    login: String, // username
     password: String,
 
     client_id: String,
@@ -23,6 +23,7 @@ pub struct LoginForm {
     scopes: String,
     code_challenge: String,
     code_challenge_method: String,
+    csrf_token: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -39,7 +40,7 @@ fn validate_login_format(form: &LoginForm) -> HashMap<String, String> {
     let mut errors = HashMap::new();
 
     if form.login.trim().is_empty() {
-        errors.insert("login".to_string(), "Username or email is required".to_string());
+        errors.insert("login".to_string(), "Username is required".to_string());
     }
 
     if form.password.is_empty() {
@@ -49,27 +50,20 @@ fn validate_login_format(form: &LoginForm) -> HashMap<String, String> {
     errors
 }
 
-async fn authenticate_user(form: &LoginForm, db: &DatabaseConnection) -> Result<crate::user::Model, AppError> {
-    let user = crate::user::Entity::find()
-        .filter(
-            Condition::any()
-                .add(crate::user::Column::Email.eq(&form.login))
-                .add(crate::user::Column::Username.eq(&form.login)),
-        )
-        .one(db)
-        .await?
-        .or_unauthorized("Invalid username or password")?;
+async fn authenticate_user(form: &LoginForm, app_state: &AppState) -> Result<crate::user::Model, AppError> {
+    let user = crate::user::Entity::find().filter(crate::user::Column::Username.eq(&form.login))
+        .one(&app_state.db).await?.or_unauthorized("Invalid username or password")?;
 
-    match verify(&form.password, &user.password_hash) {
-        Ok(true) => Ok(user),
-        Ok(false) => Err(AppError::unauthorized("Invalid username or password")),
-        Err(_) => Err(AppError::unauthorized("Invalid username or password")), // dont leak bcrypt errors!
+    if app_state.password.verify(&form.password, &user.password_hash)? {
+        Ok(user)
+    } else {
+        Err(AppError::unauthorized("Invalid username or password"))
     }
 }
 
 pub async fn get(
     Query(params): Query<AuthorizeQuery>,
-    State(db): State<DatabaseConnection>,
+    State(app_state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Html<String>, HtmlError> {
     info!(
@@ -86,7 +80,7 @@ pub async fn get(
         return Err(AppError::bad_request("Missing code challenge or state").into());
     }
 
-    let client = crate::util::validate_client_origin(&params.client_id, &headers, &db).await?;
+    let client = crate::util::validate_client_origin(&params.client_id, &headers, &app_state.db).await?;
     info!("Client origin validated successfully");
 
     let requested_scopes: Vec<String> = params.scope
@@ -109,16 +103,17 @@ pub async fn get(
         login: String::new(),
         code_challenge: params.code_challenge,
         code_challenge_method: params.code_challenge_method,
+        csrf_token: crate::util::generate_csrf_token().await,
     };
 
     Ok(Html(template.render()?))
 }
 
 pub async fn post(
-    State(db): State<DatabaseConnection>,
+    State(app_state): State<AppState>,
     Form(form): Form<LoginForm>
 ) -> Result<FormResponse<Redirect>, HtmlError> {
-    let render_error = |errors: HashMap<String, String>| -> Result<FormResponse<Redirect>, HtmlError> {
+    let render_error = async |errors: HashMap<String, String>| -> Result<FormResponse<Redirect>, HtmlError> {
         let template = LoginTemplate {
             client_id: form.client_id.clone(),
             redirect_uri: form.redirect_uri.clone(),
@@ -128,6 +123,7 @@ pub async fn post(
             login: form.login.clone(),
             code_challenge: form.code_challenge.clone(),
             code_challenge_method: form.code_challenge_method.clone(),
+            csrf_token: crate::util::generate_csrf_token().await,
         };
         let rendered = template.render()?;
         Ok(FormResponse::ValidationErrors(Html(rendered)))
@@ -135,15 +131,21 @@ pub async fn post(
 
     let format_errors = validate_login_format(&form);
     if !format_errors.is_empty() {
-        return render_error(format_errors);
+        return render_error(format_errors).await;
     }
 
-    let user = match authenticate_user(&form, &db).await {
+    if !crate::util::validate_csrf_token(&form.csrf_token).await {
+        let mut errors = HashMap::new();
+        errors.insert("csrf".to_string(), "Invalid request, try again".to_string());
+        return render_error(errors).await;
+    }
+
+    let user = match authenticate_user(&form, &app_state).await {
         Ok(user) => user,
         Err(AppError::Unauthorized(msg)) => {
             let mut errors = HashMap::new();
             errors.insert("general".to_string(), msg);
-            return render_error(errors);
+            return render_error(errors).await;
         }
         Err(e) => return Err(e.into()),
     };
@@ -161,7 +163,7 @@ pub async fn post(
         ..Default::default()
     };
 
-    auth_code.insert(&db).await.context("Failed to create auth code")?;
+    auth_code.insert(&app_state.db).await.context("Failed to create auth code")?;
 
     let mut redirect_url = url::Url::parse(&form.redirect_uri).context("Invalid redirect URI")?;
 

@@ -2,7 +2,7 @@ use axum::{Extension, Json, extract::State};
 use chrono::Utc;
 use sea_orm::*;
 use serde::{Deserialize, Serialize};
-use crate::error::{AppError, OptionExt};
+use crate::{error::{AppError, OptionExt}, AppState};
 
 #[derive(Deserialize)]
 pub struct UpdateUserRequest {
@@ -25,7 +25,7 @@ pub struct UpdateUserResponse {
 
 pub async fn patch(
     Extension(auth_user): Extension<crate::middleware::user::AuthenticatedUser>,
-    State(db): State<DatabaseConnection>,
+    State(app_state): State<AppState>,
     Json(req): Json<UpdateUserRequest>,
 ) -> Result<Json<UpdateUserResponse>, AppError> {
     if req.user_id != auth_user.user.id && !auth_user.user.is_admin {
@@ -33,7 +33,7 @@ pub async fn patch(
     }
 
     let user = crate::user::Entity::find_by_id(&req.user_id)
-        .one(&db).await?
+        .one(&app_state.db).await?
         .or_not_found(format!("User not found: {}", req.user_id))?;
 
     let mut user_update: crate::user::ActiveModel = user.into();
@@ -68,8 +68,7 @@ pub async fn patch(
 
     user_update.updated_at = Set(Utc::now());
 
-    let updated_user = user_update
-        .update(&db).await?;
+    let updated_user = user_update.update(&app_state.db).await?;
 
     Ok(Json(UpdateUserResponse {
         success: true,

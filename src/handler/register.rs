@@ -1,9 +1,9 @@
+use crate::AppState;
 use crate::{templates::RegisterTemplate};
 use crate::handler::geoloc::{get_country_from_ip, get_forwarded_ip};
 use askama::Template;
 use axum::http::HeaderMap;
 use axum::{extract::{ConnectInfo, Query, State}, response::{Html, Redirect}, Form};
-use bcrypt::{DEFAULT_COST, hash};
 use sea_orm::*;
 use serde::Deserialize;
 use std::{collections::HashMap, net::SocketAddr};
@@ -20,6 +20,7 @@ pub struct CreateUserRequest {
     scopes: String,
     code_challenge: String,
     code_challenge_method: String,
+    csrf_token: String,
 }
 
 #[derive(Deserialize)]
@@ -44,6 +45,7 @@ pub async fn get(Query(oauth_params): Query<RegisterQuery>) -> Result<Html<Strin
         scopes: oauth_params.scope.unwrap_or_default(),
         code_challenge: oauth_params.code_challenge,
         code_challenge_method: oauth_params.code_challenge_method,
+        csrf_token: crate::util::generate_csrf_token().await,
     };
     Ok(Html(template.render()?))
 }
@@ -93,60 +95,67 @@ async fn validate_database(req: &CreateUserRequest, db: &DatabaseConnection) -> 
 pub async fn post(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
-    State(db): State<DatabaseConnection>,
-    Form(req): Form<CreateUserRequest>,
+    State(app_state): State<AppState>,
+    Form(form): Form<CreateUserRequest>,
 ) -> Result<FormResponse<Redirect>, HtmlError> {
-    let render_error = |errors: HashMap<String, String>| -> Result<FormResponse<Redirect>, HtmlError> {
+    let render_error = async |errors: HashMap<String, String>| -> Result<FormResponse<Redirect>, HtmlError> {
         let template = RegisterTemplate {
             errors,
-            email: req.email.clone(),
-            username: req.username.clone(),
-            client_id: req.client_id.clone(),
-            redirect_uri: req.redirect_uri.clone(),
-            state: req.state.clone(),
-            scopes: req.scopes.clone(),
-            code_challenge: req.code_challenge.clone(),
-            code_challenge_method: req.code_challenge_method.clone(),
+            email: form.email.clone(),
+            username: form.username.clone(),
+            client_id: form.client_id.clone(),
+            redirect_uri: form.redirect_uri.clone(),
+            state: form.state.clone(),
+            scopes: form.scopes.clone(),
+            code_challenge: form.code_challenge.clone(),
+            code_challenge_method: form.code_challenge_method.clone(),
+            csrf_token: crate::util::generate_csrf_token().await,
         };
         let rendered = template.render()?;
         Ok(FormResponse::ValidationErrors(Html(rendered)))
     };
 
+    if !crate::util::validate_csrf_token(&form.csrf_token).await {
+        let mut errors = HashMap::new();
+        errors.insert("csrf".to_string(), "Invalid request, try again".to_string());
+        return render_error(errors).await;
+    }
+
     // check format fast first
-    let format_errors = validate_format(&req);
+    let format_errors = validate_format(&form);
     if !format_errors.is_empty() {
-        return render_error(format_errors);
+        return render_error(format_errors).await;
     }
 
     // db check
-    let db_errors = validate_database(&req, &db).await?;
+    let db_errors = validate_database(&form, &app_state.db).await?;
     if !db_errors.is_empty() {
-        return render_error(db_errors);
+        return render_error(db_errors).await;
     }
 
-    let password_hash = hash(req.password, DEFAULT_COST)?;
+    let password_hash = app_state.password.hash(&form.password)?;
 
     let ip = get_forwarded_ip(&headers).unwrap_or_else(|| addr.ip().to_string());
     let country = get_country_from_ip(&ip).await;
 
     let user = crate::user::ActiveModel {
-        email: Set(req.email.clone()),
-        username: Set(req.username.clone()),
+        email: Set(form.email.clone()),
+        username: Set(form.username.clone()),
         password_hash: Set(password_hash),
         country: Set(country),
         ..Default::default()
     };
     
-    user.insert(&db).await?;
+    user.insert(&app_state.db).await?;
 
     let redirect_url = format!(
         "/authorize?client_id={}&redirect_uri={}&scope={}&state={}&code_challenge={}&code_challenge_method={}",
-        urlencoding::encode(&req.client_id),
-        urlencoding::encode(&req.redirect_uri), 
-        urlencoding::encode(&req.scopes),
-        urlencoding::encode(&req.state),
-        urlencoding::encode(&req.code_challenge),
-        urlencoding::encode(&req.code_challenge_method)
+        urlencoding::encode(&form.client_id),
+        urlencoding::encode(&form.redirect_uri), 
+        urlencoding::encode(&form.scopes),
+        urlencoding::encode(&form.state),
+        urlencoding::encode(&form.code_challenge),
+        urlencoding::encode(&form.code_challenge_method)
     );
     
     Ok(FormResponse::Success(Redirect::to(&redirect_url)))

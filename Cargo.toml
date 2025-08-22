@@ -5,14 +5,15 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.99"
+argon2 = "0.5.3"
 askama = "0.14.0"
 axum = "0.8.4"
 base64 = "0.22.1"
-bcrypt = "0.17.0"
 chrono = "0.4.41"
 dotenvy = "0.15.7"
 maxminddb = "0.26.0"
 openssl = { version = "0.10.73", features = ["vendored"] }
+redis = { version = "0.32.5", features = ["connection-manager", "tokio-comp"] }
 reqwest = "0.12.23"
 ring = "0.17.14"
 sea-orm = { version = "1.1.14", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls", "macros"] }
@@ -22,7 +23,8 @@ sha2 = "0.10.9"
 thiserror = "2.0.14"
 tokio = { version = "1.47.1", features = ["full"] }
 tower = "0.5.2"
-tower-http = { version = "0.6.6", features = ["fs", "cors", "trace"] }
+tower-http = { version = "0.6.6", features = ["fs", "cors", "trace", "timeout", "limit"] }
+tower_governor = "0.8.0"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 url = "2.5.4"
