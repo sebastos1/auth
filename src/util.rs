@@ -58,6 +58,27 @@ pub async fn validate_client_origin(
     Ok(client)
 }
 
+pub fn validate_redirect_uri(client: &client::Model, redirect_uri: &str) -> Result<(), AppError> {
+    let auth_base = if *crate::IS_PRODUCTION {
+        "https://auth.sjallabong.eu"
+    } else {
+        "http://localhost:3001"
+    };
+
+    if redirect_uri == format!("{}/success", auth_base) {
+        return Ok(());
+    }
+
+    let redirect_uris = client.get_redirect_uris()?;
+    if !redirect_uris.contains(&redirect_uri.to_string()) {
+        return Err(AppError::bad_request(format!(
+            "Invalid redirect_uri: {}",
+            redirect_uri
+        )));
+    }
+    Ok(())
+}
+
 // in memory csrf store, debug only
 use std::sync::LazyLock;
 static CSRF_TOKENS: LazyLock<RwLock<HashMap<String, u64>>> = LazyLock::new(|| RwLock::new(HashMap::new()));

@@ -30,7 +30,8 @@ pub async fn post(
     headers: HeaderMap,
     Form(form): Form<TokenRequest>,
 ) -> Result<Json<TokenResponse>, AppError> {
-    let _client = crate::util::validate_client_origin(&form.client_id, &headers, &app_state.db).await?;
+    let client = crate::util::validate_client_origin(&form.client_id, &headers, &app_state.db).await?;
+    crate::util::validate_redirect_uri(&client, &form.redirect_uri.clone().unwrap_or_default())?;
 
     match form.grant_type.as_str() {
         "authorization_code" => handle_authorization_code(&app_state.db, form).await,

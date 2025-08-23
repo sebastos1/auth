@@ -23,8 +23,7 @@ use entity::{client, token, user};
 
 use std::sync::LazyLock;
 
-static IS_PRODUCTION: LazyLock<bool> =
-    LazyLock::new(|| std::env::var("AUTH_ENV").unwrap_or_else(|_| "development".to_string()) == "production");
+static IS_PRODUCTION: LazyLock<bool> = LazyLock::new(|| std::env::var("AUTH_ENV").unwrap_or_else(|_| "development".to_string()) == "production");
 
 async fn get_redis_connection() -> Result<redis::aio::ConnectionManager, redis::RedisError> {
     let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
@@ -74,8 +73,8 @@ async fn main() -> Result<()> {
         .route("/token", post(handler::token::post))
         .route("/authorize", get(handler::auth::get).post(handler::auth::post))
         .route("/register", get(handler::register::get).post(handler::register::post))
-        .layer(GovernorLayer::new(rate_limit_config))
         .route("/revoke", post(handler::revoke::post))
+        .layer(GovernorLayer::new(rate_limit_config))
         .merge(
             Router::new()
                 .route("/userinfo", get(handler::userinfo::get))

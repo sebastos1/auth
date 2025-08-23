@@ -93,6 +93,8 @@ pub async fn get(
     let client = crate::util::validate_client_origin(&params.client_id, &headers, &app_state.db).await?;
     info!("Client origin validated successfully");
 
+    crate::util::validate_redirect_uri(&client, &params.redirect_uri)?;
+
     let requested_scopes: Vec<String> = params
         .scope
         .as_deref()
@@ -187,6 +189,13 @@ pub async fn post(
         .context("Failed to create auth code")?;
 
     let mut redirect_url = url::Url::parse(&form.redirect_uri).context("Invalid redirect URI")?;
+
+    // revalidate this bad boy
+    let client = crate::client::Entity::find_by_id(&form.client_id)
+        .one(&app_state.db)
+        .await?
+        .or_bad_request(format!("Invalid client_id: {}", form.client_id))?;
+    crate::util::validate_redirect_uri(&client, &form.redirect_uri)?;
 
     redirect_url.query_pairs_mut().append_pair("code", &code);
     if let Some(state) = &form.state {

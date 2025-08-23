@@ -34,4 +34,8 @@ impl Model {
     pub fn get_authorized_origins(&self) -> Result<Vec<String>, serde_json::Error> {
         serde_json::from_str(&self.authorized_origins)
     }
+
+    pub fn get_redirect_uris(&self) -> Result<Vec<String>, serde_json::Error> {
+        serde_json::from_str(&self.redirect_uris)
+    }
 }
