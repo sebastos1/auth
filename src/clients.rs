@@ -18,6 +18,13 @@ pub async fn create_clients(db: &DatabaseConnection) -> Result<()> {
             vec!["openid", "profile"],
             vec!["https://pool.sjallabong.eu", "http://localhost:8080"],
         ),
+        (
+            "chattabong",
+            "Chattabong",
+            vec!["https://sjallabong.eu/auth/callback", "http://localhost:5173/auth/callback"],
+            vec!["openid", "profile"],
+            vec!["https://sjallabong.eu", "http://localhost:5173"],
+        ),
     ];
 
     for (client_id, name, redirect_uris, scopes, origins) in clients {
@@ -36,7 +43,7 @@ pub async fn create_clients(db: &DatabaseConnection) -> Result<()> {
         };
 
         client.insert(db).await?;
-        println!("Created client: {client_id}");
+        tracing::info!("Created client: {client_id}");
     }
 
     Ok(())

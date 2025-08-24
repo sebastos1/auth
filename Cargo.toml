@@ -11,6 +11,7 @@ axum = "0.8.4"
 base64 = "0.22.1"
 chrono = "0.4.41"
 dotenvy = "0.15.7"
+jsonwebtoken = "9.3.1"
 maxminddb = "0.26.0"
 openssl = { version = "0.10.73", features = ["vendored"] }
 redis = { version = "0.32.5", features = ["connection-manager", "tokio-comp"] }

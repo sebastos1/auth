@@ -10,6 +10,7 @@ use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 use tower_http::{limit::RequestBodyLimitLayer, timeout::TimeoutLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+// CLEANUP TODOODOTODOTODOO holy
 mod clients;
 mod db;
 mod entity;
@@ -19,6 +20,7 @@ mod middleware;
 mod password;
 mod templates;
 mod util;
+mod jwt;
 use entity::{client, token, user};
 
 use std::sync::LazyLock;
@@ -81,11 +83,11 @@ async fn main() -> Result<()> {
                 .route("/update/user", patch(handler::update::user::patch))
                 .layer(axum_mw::from_fn_with_state(
                     app_state.clone(),
-                    middleware::user::user_auth_middleware,
+                    middleware::user::auth,
                 )),
         )
-        .route("/success", get(handler::success::get))
-        .route("/sdk", get(handler::sdk::get))
+        // .route("/success", get(handler::success::get))
+        // .route("/sdk", get(handler::sdk::get))
         .route("/geolocate", get(handler::geoloc::get))
         .with_state(app_state)
         .layer(axum_mw::from_fn(middleware::security::headers))
@@ -100,7 +102,7 @@ async fn main() -> Result<()> {
         .layer(middleware::security::cors_layer());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3001));
-    println!("Listening on {addr}");
+    tracing::info!("Listening on {addr}");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;

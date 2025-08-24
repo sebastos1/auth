@@ -42,8 +42,8 @@ impl Entity {
         redirect_uri: &str,
         code_verifier: &str,
         db: &DatabaseConnection,
-    ) -> Result<(String, String, String), DbErr> {
-        // (access_token, refresh_token, scopes)
+    ) -> Result<(String, String, String, crate::user::Model), DbErr> {
+        // (access_token, refresh_token, scopes, user_id)
         let txn = db.begin().await?;
 
         // validation
@@ -73,7 +73,9 @@ impl Entity {
         // delete auth code
         Self::delete_by_id(code).exec(&txn).await?;
 
+        let user = crate::user::Entity::find_by_id(auth_code.user_id).one(&txn).await?.ok_or(DbErr::RecordNotFound(String::new()))?;
+        
         txn.commit().await?;
-        Ok((access_token, refresh_token, auth_code.scopes))
+        Ok((access_token, refresh_token, auth_code.scopes, user))
     }
 }

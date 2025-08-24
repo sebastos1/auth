@@ -1,0 +1,29 @@
+{
+  "name": "sjallabong-auth",
+  "version": "1.0.2",
+  "description": "Oauth2 SDK for sjallabong auth",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./server": "./dist/server.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://gitlab.com/sjallabong/auth.git"
+  },
+  "keywords": [
+    "oauth2",
+    "auth",
+    "sdk"
+  ],
+  "author": "sjallabong",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://gitlab.com/sjallabong/auth/issues"
+  },
+  "homepage": "https://gitlab.com/sjallabong/auth#readme"
+}

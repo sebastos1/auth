@@ -38,11 +38,6 @@ pub struct LoginTemplate {
     pub csrf_token: String,
 }
 
-// injects the auth server url into the sdk so it knows where to send requests
-#[derive(Template)]
-#[template(path = "sdk.js", escape = "none")]
-pub struct SdkTemplate;
-
 #[derive(Template)]
 #[template(path = "error.html")]
 pub struct ErrorTemplate {

@@ -17,7 +17,7 @@ pub async fn get(Query(params): Query<GeolocateQuery>) -> Json<Option<String>> {
 }
 
 pub async fn get_country_from_ip(ip_str: &str) -> Option<String> {
-    println!("Geolocating IP: {ip_str}");
+    tracing::info!("Geolocating IP: {ip_str}");
 
     if !*IS_PRODUCTION {
         return Some("NO".to_string());

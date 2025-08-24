@@ -36,15 +36,19 @@ pub async fn headers(request: Request, next: Next) -> Response {
     let csp = if *crate::IS_PRODUCTION {
         "default-src 'self'; \
         script-src 'self' 'unsafe-inline'; \
-        style-src 'self' 'unsafe-inline'; \
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; \
+        style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; \
+        font-src 'self' https://fonts.gstatic.com; \
         img-src 'self' data: https:; \
         form-action 'self'; \
         frame-ancestors 'none'; \
         base-uri 'self'"
     } else {
         "default-src 'self' 'unsafe-inline' 'unsafe-eval'; \
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; \
+        style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; \
+        font-src 'self' https://fonts.gstatic.com; \
         img-src 'self' data: http: https:; \
-        form-action 'self'; \
         frame-ancestors 'none'"
     };
 

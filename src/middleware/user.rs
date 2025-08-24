@@ -34,7 +34,7 @@ impl AuthenticatedUser {
     }
 }
 
-pub async fn user_auth_middleware(
+pub async fn auth(
     State(app_state): State<AppState>,
     headers: HeaderMap,
     mut request: Request,
@@ -45,9 +45,20 @@ pub async fn user_auth_middleware(
         .and_then(|h| h.to_str().ok())
         .and_then(|h| h.strip_prefix("Bearer "))
         .or_unauthorized("Bearer token required")?;
-    let access_token = crate::token::access::Entity::verify(token, &app_state.db)
-        .await?
-        .or_unauthorized("Invalid or expired token")?;
+
+    let access_token = crate::token::access::Entity::verify(token, &app_state.db).await?;
+    let access_token = match access_token {
+        Some(token) => token,
+        None => {
+            if let Some(_expired_token) = crate::token::access::Entity::find_by_id(token)
+                .one(&app_state.db).await? {
+                return Err(AppError::unauthorized("Access token expired"));
+            } else {
+                return Err(AppError::unauthorized("Invalid access token"));
+            }
+        }
+    };
+
     let user = crate::user::Entity::find_by_id(&access_token.user_id)
         .one(&app_state.db)
         .await?

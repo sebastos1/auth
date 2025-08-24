@@ -41,7 +41,13 @@ impl PasswordService {
     pub fn verify(&self, password: &str, hash: &str) -> Result<bool> {
         let peppered = format!("{}{}", password, self.pepper);
 
-        let parsed_hash = PasswordHash::new(hash).map_err(|e| anyhow!("Invalid hash format: {}", e))?;
+        let parsed_hash = match PasswordHash::new(hash) {
+            Ok(h) => h,
+            Err(_) => {
+                tracing::error!("Stored password hash is invalid: {}", hash);
+                return Ok(false)
+            }
+        };
 
         match self.argon2.verify_password(peppered.as_bytes(), &parsed_hash) {
             Ok(()) => Ok(true),
