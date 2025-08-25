@@ -4,7 +4,7 @@ export interface Config {
     scope?: string;
     redirectUri?: string;
     successUri?: string;
-    services: Record<string, string>;
+    services?: Record<string, string>;
 }
 
 interface TokenResponse {
@@ -21,6 +21,7 @@ interface SessionData {
     expiresAt: number;
     codeVerifier?: string;
     state?: string;
+    isPopup?: boolean;
     userInfo?: any;
 }
 
@@ -55,11 +56,14 @@ export default class OAuth2Server {
         return btoa(String.fromCharCode(...new Uint8Array(hash))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     }
 
-    async login(): Promise<Response> {
+    async login(request: Request): Promise<Response> {
         try {
             const codeVerifier = this.generateCode(32);
             const codeChallenge = await this.sha256(codeVerifier);
             const state = this.generateCode(16); // 16-32 recommended
+
+            const url = new URL(request.url);
+            const isPopup = url.searchParams.get('popup') === 'true';
 
             // todo: store this somewhere, and clean old ones
             const sessionId = this.generateCode(32);
@@ -67,6 +71,7 @@ export default class OAuth2Server {
                 accessToken: '',
                 codeVerifier,
                 state,
+                isPopup,
                 expiresAt: Date.now() + 600000
             });
 
@@ -164,8 +169,28 @@ export default class OAuth2Server {
                 session.userInfo = this.decodeIdToken(tokens.id_token);
             }
 
+            const isPopup = session.isPopup || false;
+
             delete session.codeVerifier;
             delete session.state;
+            delete session.isPopup;
+
+            if (isPopup) {
+                const script = `<script>
+                    if (window.opener) {
+                        window.opener.postMessage({
+                            type: 'oauth_success',
+                            userInfo: ${JSON.stringify(session.userInfo || true)}
+                        }, window.location.origin);
+                    }
+                    window.close();
+                    </script>`;
+
+                return new Response(script, {
+                    status: 200,
+                    headers: { 'Content-Type': 'text/html' }
+                });
+            }
 
             return new Response(null, {
                 status: 302,
@@ -174,7 +199,6 @@ export default class OAuth2Server {
                     'Set-Cookie': `session_id=${sessionId}; HttpOnly; Secure; SameSite=Strict; Path=/;`
                 }
             });
-
         } catch (error) {
             console.error('Callback error:', error);
             return new Response(JSON.stringify({ error: 'Authentication failed' }), {

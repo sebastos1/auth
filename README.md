@@ -1,8 +1,6 @@
 # auth
 
-This service is the central point of auth for sjallabong, with oauth2.
-
-Clients are hardcoded for now.
+This service is the central point of auth for sjallabong, with oauth2, with pkce bff.
 
 ```sh
 git clone https://gitlab.com/sjallabong/auth
@@ -42,6 +40,9 @@ cargo run # port 3001
 - `openid` authentication
 - `profile` username, avatar, etc
 - `email`
+
+### todo
 - `pool` pool.sjallabong.eu stats
-- `idle` todo
+- `idle`
 - `admin`
+

@@ -1,10 +1,131 @@
-// cors header
-// todo this bad boy
+export default class OAuth2Client {
+    private bffUrl: string;
+    private user: any = null;
 
-export interface OAuth2ClientConfig {
-    backendUrl: string;
-    authServer?: string;
+    constructor(bffUrl: string) {
+        if (!bffUrl) throw new Error("BFF URL is required");
+        this.bffUrl = bffUrl.replace(/\/$/, '');
+        this.checkAuth();
+    }
+
+    getUser() {
+        return this.user;
+    }
+
+    isAuthenticated(): boolean {
+        return this.user !== null;
+    }
+
+    async checkAuth() {
+        try {
+            const response = await fetch(`${this.bffUrl}/check-session`, {
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                this.user = data.authenticated ? data.userInfo : null;
+                return this.user;
+            }
+
+            this.user = null;
+            return null;
+        } catch (error) {
+            this.user = null;
+            return null;
+        }
+    }
+
+    async login(usePopup = false) {
+        if (usePopup) {
+            const user = await this.loginPopup();
+            this.user = user;
+            return user;
+        } else {
+            window.location.href = `${this.bffUrl}/login`;
+        }
+    }
+
+    private loginPopup(): Promise<any> {
+        return new Promise((resolve, reject) => {
+            const popup = window.open(
+                `${this.bffUrl}/login?popup=true`,
+                'oauth-login',
+                'width=500,height=600,scrollbars=yes,resizable=yes'
+            );
+            if (!popup) return reject(new Error("Failed to open popup"));
+
+            const messageHandler = (event: MessageEvent) => {
+                // origin check
+                if (!event.origin.startsWith(window.location.origin)) return;
+
+                window.removeEventListener('message', messageHandler);
+                clearInterval(checkClosed);
+                clearTimeout(timeoutHandler);
+                popup.close();
+
+                if (event.data.type === 'oauth_success') {
+                    resolve(event.data.userInfo || true);
+                } else if (event.data.type === 'oauth_error') {
+                    reject(new Error(event.data.error || 'Login failed'));
+                } else {
+                    reject(new Error('Invalid response from login'));
+                }
+            };
+
+            const checkClosed = setInterval(() => {
+                if (popup.closed) {
+                    clearInterval(checkClosed);
+                    clearTimeout(timeoutHandler);
+                    window.removeEventListener('message', messageHandler);
+                    reject(new Error('Login cancelled'));
+                }
+            }, 1000);
+
+            const timeoutHandler = setTimeout(() => {
+                if (!popup.closed) {
+                    popup.close();
+                    window.removeEventListener('message', messageHandler);
+                    clearInterval(checkClosed);
+                    reject(new Error('Login timeout'));
+                }
+            }, 300000);
+
+            window.addEventListener('message', messageHandler);
+        });
+    }
+
+    async logout() {
+        try {
+            await fetch(`${this.bffUrl}/logout`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+        } catch (error) {
+            console.log("Logout failed, still clearing local state:", error);
+        }
+
+        this.user = null;
+    }
+
+    async fetch(path: string, options: RequestInit = {}) {
+        const url = path.startsWith('http') ? path : `${this.bffUrl}${path}`;
+        const response = await fetch(url, {
+            ...options,
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+
+        if (response.status === 401) await this.checkAuth();
+        return response;
+    }
 }
+
+
+/*
 
 export interface AuthOptions {
     onSuccess?: (user: any) => void;
@@ -15,9 +136,7 @@ export default class OAuth2Client {
     private config: OAuth2ClientConfig;
 
     constructor(config: OAuth2ClientConfig) {
-        if (!config?.backendUrl) {
-            throw new Error("BFF base URL is required");
-        }
+        if (!config?.backendUrl) throw new Error("BFF URL is required");
         this.config = config;
     }
 
@@ -137,3 +256,4 @@ export default class OAuth2Client {
     }
 
 }
+*/

@@ -4,7 +4,7 @@ export interface Config {
     scope?: string;
     redirectUri?: string;
     successUri?: string;
-    services: Record<string, string>;
+    services?: Record<string, string>;
 }
 export default class OAuth2Server {
     private config;
@@ -12,7 +12,7 @@ export default class OAuth2Server {
     constructor(config: Config);
     private generateCode;
     private sha256;
-    login(): Promise<Response>;
+    login(request: Request): Promise<Response>;
     private getTokens;
     private decodeIdToken;
     private getSessionId;

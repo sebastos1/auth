@@ -25,17 +25,20 @@ export default class OAuth2Server {
         const hash = await crypto.subtle.digest('SHA-256', data);
         return btoa(String.fromCharCode(...new Uint8Array(hash))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     }
-    async login() {
+    async login(request) {
         try {
             const codeVerifier = this.generateCode(32);
             const codeChallenge = await this.sha256(codeVerifier);
             const state = this.generateCode(16); // 16-32 recommended
+            const url = new URL(request.url);
+            const isPopup = url.searchParams.get('popup') === 'true';
             // todo: store this somewhere, and clean old ones
             const sessionId = this.generateCode(32);
             this.sessions.set(sessionId, {
                 accessToken: '',
                 codeVerifier,
                 state,
+                isPopup,
                 expiresAt: Date.now() + 600000
             });
             const params = new URLSearchParams({
@@ -127,8 +130,25 @@ export default class OAuth2Server {
             if (tokens.id_token) {
                 session.userInfo = this.decodeIdToken(tokens.id_token);
             }
+            const isPopup = session.isPopup || false;
             delete session.codeVerifier;
             delete session.state;
+            delete session.isPopup;
+            if (isPopup) {
+                const script = `<script>
+                    if (window.opener) {
+                        window.opener.postMessage({
+                            type: 'oauth_success',
+                            userInfo: ${JSON.stringify(session.userInfo || true)}
+                        }, window.location.origin);
+                    }
+                    window.close();
+                    </script>`;
+                return new Response(script, {
+                    status: 200,
+                    headers: { 'Content-Type': 'text/html' }
+                });
+            }
             return new Response(null, {
                 status: 302,
                 headers: {
