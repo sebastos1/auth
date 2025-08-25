@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 
 const EXPIRATION_DAYS: i64 = 30;
 
+// TODO: ROTATION, BLACKLISTING
+
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "refresh_tokens")]
 pub struct Model {

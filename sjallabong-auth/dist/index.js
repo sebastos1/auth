@@ -1,6 +1,28 @@
+// todo session mgmt, cleanup, invalidation, etc
+class DevSessionStore {
+    constructor() {
+        this.store = new Map();
+    }
+    async set(key, value, ttlMs = 600000) {
+        this.store.set(key, {
+            data: value,
+            expires: Date.now() + ttlMs
+        });
+    }
+    async get(key) {
+        const entry = this.store.get(key);
+        if (!entry || entry.expires < Date.now()) {
+            this.store.delete(key);
+            return null;
+        }
+        return entry.data;
+    }
+    async delete(key) {
+        this.store.delete(key);
+    }
+}
 export default class OAuth2Server {
-    constructor(config) {
-        this.sessions = new Map();
+    constructor(config, sessionStore) {
         if (!config?.clientId)
             throw new Error("Client ID is required");
         if (!config?.authServer)
@@ -13,17 +35,21 @@ export default class OAuth2Server {
             successUri: config.successUri || "/",
             services: config.services || {},
         };
+        this.sessionStore = sessionStore || new DevSessionStore();
     }
     generateCode(length) {
         const array = new Uint8Array(length);
         crypto.getRandomValues(array);
-        return btoa(String.fromCharCode(...array)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        return btoa(String.fromCharCode(...array)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
     }
     async sha256(text) {
         const encoder = new TextEncoder();
         const data = encoder.encode(text);
-        const hash = await crypto.subtle.digest('SHA-256', data);
-        return btoa(String.fromCharCode(...new Uint8Array(hash))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        const hash = await crypto.subtle.digest("SHA-256", data);
+        return btoa(String.fromCharCode(...new Uint8Array(hash))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+    }
+    setSessionCookie(sessionId, maxAgeSeconds) {
+        return `session_id=${sessionId}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${maxAgeSeconds}`;
     }
     async login(request) {
         try {
@@ -31,16 +57,16 @@ export default class OAuth2Server {
             const codeChallenge = await this.sha256(codeVerifier);
             const state = this.generateCode(16); // 16-32 recommended
             const url = new URL(request.url);
-            const isPopup = url.searchParams.get('popup') === 'true';
+            const isPopup = url.searchParams.get("popup") === "true";
             // todo: store this somewhere, and clean old ones
             const sessionId = this.generateCode(32);
-            this.sessions.set(sessionId, {
-                accessToken: '',
+            this.sessionStore.set(sessionId, {
+                accessToken: "",
                 codeVerifier,
                 state,
                 isPopup,
                 expiresAt: Date.now() + 600000
-            });
+            }, 600000);
             const params = new URLSearchParams({
                 client_id: this.config.clientId,
                 redirect_uri: this.config.redirectUri,
@@ -54,24 +80,24 @@ export default class OAuth2Server {
             return new Response(null, {
                 status: 302,
                 headers: {
-                    'Location': authUrl,
-                    'Set-Cookie': `session_id=${sessionId}; HttpOnly; Secure; SameSite=Strict; Path=/;`
+                    "Location": authUrl,
+                    "Set-Cookie": this.setSessionCookie(sessionId, 600)
                 }
             });
         }
         catch (error) {
-            return new Response(JSON.stringify({ error: 'Login initiation failed' }), {
+            return new Response(JSON.stringify({ error: "Login initiation failed" }), {
                 status: 500,
-                headers: { 'Content-Type': 'application/json' }
+                headers: { "Content-Type": "application/json" }
             });
         }
     }
     async getTokens(code, codeVerifier) {
         const response = await fetch(`${this.config.authServer}/token`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: new URLSearchParams({
-                grant_type: 'authorization_code',
+                grant_type: "authorization_code",
                 client_id: this.config.clientId,
                 code,
                 redirect_uri: this.config.redirectUri,
@@ -85,12 +111,12 @@ export default class OAuth2Server {
         return await response.json();
     }
     decodeIdToken(idToken) {
-        const payload = idToken.split('.')[1];
-        const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+        const payload = idToken.split(".")[1];
+        const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
         return JSON.parse(decoded);
     }
     getSessionId(request) {
-        const cookies = request.headers.get('cookie');
+        const cookies = request.headers.get("cookie");
         if (!cookies)
             return null;
         const sessionMatch = cookies.match(/session_id=([^;]+)/);
@@ -98,30 +124,26 @@ export default class OAuth2Server {
             return null;
         return sessionMatch[1];
     }
-    // todo store better
-    getSession(sessionId) {
-        return this.sessions.get(sessionId) || null;
-    }
     async callback(request) {
         try {
             const url = new URL(request.url);
-            const auth_code = url.searchParams.get('code');
-            const state = url.searchParams.get('state');
-            const error = url.searchParams.get('error');
+            const auth_code = url.searchParams.get("code");
+            const state = url.searchParams.get("state");
+            const error = url.searchParams.get("error");
             if (error)
-                return new Response(null, { status: 302, headers: { 'Location': `${this.config.redirectUri}?error=${error}` } });
+                return new Response(null, { status: 302, headers: { "Location": `${this.config.redirectUri}?error=${error}` } });
             if (!auth_code || !state)
-                return new Response('Missing authorization code or state', { status: 400 });
+                return new Response("Missing authorization code or state", { status: 400 });
             const sessionId = this.getSessionId(request);
             if (!sessionId)
-                return new Response('Invalid session', { status: 400 });
-            const session = this.getSession(sessionId);
+                return new Response("Invalid session", { status: 400 });
+            const session = await this.sessionStore.get(sessionId);
             if (!session)
-                return new Response('Invalid session', { status: 400 });
+                return new Response("Invalid session", { status: 400 });
             if (session.state !== state)
-                return new Response('State mismatch', { status: 400 });
+                return new Response("State mismatch", { status: 400 });
             if (!session.codeVerifier)
-                return new Response('Missing code verifier', { status: 400 });
+                return new Response("Missing code verifier", { status: 400 });
             // authorization code -> tokens
             const tokens = await this.getTokens(auth_code, session.codeVerifier);
             session.accessToken = tokens.access_token;
@@ -134,11 +156,12 @@ export default class OAuth2Server {
             delete session.codeVerifier;
             delete session.state;
             delete session.isPopup;
+            await this.sessionStore.set(sessionId, session);
             if (isPopup) {
                 const script = `<script>
                     if (window.opener) {
                         window.opener.postMessage({
-                            type: 'oauth_success',
+                            type: "oauth_success",
                             userInfo: ${JSON.stringify(session.userInfo || true)}
                         }, window.location.origin);
                     }
@@ -146,40 +169,46 @@ export default class OAuth2Server {
                     </script>`;
                 return new Response(script, {
                     status: 200,
-                    headers: { 'Content-Type': 'text/html' }
+                    headers: { "Content-Type": "text/html" }
                 });
             }
+            // 30 days per auth server (todo move out)?
+            const maxAge = 30 * 24 * 60 * 60;
             return new Response(null, {
                 status: 302,
                 headers: {
-                    'Location': this.config.successUri,
-                    'Set-Cookie': `session_id=${sessionId}; HttpOnly; Secure; SameSite=Strict; Path=/;`
+                    "Location": this.config.successUri,
+                    "Set-Cookie": this.setSessionCookie(sessionId, maxAge)
                 }
             });
         }
         catch (error) {
-            console.error('Callback error:', error);
-            return new Response(JSON.stringify({ error: 'Authentication failed' }), {
+            console.error("Callback error:", error);
+            return new Response(JSON.stringify({ error: "Authentication failed" }), {
                 status: 500,
-                headers: { 'Content-Type': 'application/json' }
+                headers: { "Content-Type": "application/json" }
             });
         }
     }
-    async logout() {
+    async logout(request) {
+        if (!request.headers.get('X-CSRF-Token'))
+            return new Response("Forbidden", { status: 403 });
+        const sessionId = this.getSessionId(request);
+        if (sessionId)
+            await this.sessionStore.delete(sessionId);
         return new Response(null, {
-            status: 302,
+            status: 204,
             headers: {
-                'Location': this.config.successUri,
-                'Set-Cookie': `session_id=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`
+                "Set-Cookie": this.setSessionCookie("", 0)
             }
         });
     }
     async refresh(session) {
         const response = await fetch(`${this.config.authServer}/token`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: new URLSearchParams({
-                grant_type: 'refresh_token',
+                grant_type: "refresh_token",
                 client_id: this.config.clientId,
                 refresh_token: session.refreshToken
             })
@@ -195,43 +224,48 @@ export default class OAuth2Server {
     }
     // bff proxy
     async fetchApi(request) {
+        if (request.method !== 'GET' && !request.headers.get('X-CSRF-Token'))
+            return new Response("Forbidden", { status: 403 });
         const sessionId = this.getSessionId(request);
         if (!sessionId)
-            return new Response('No session', { status: 401 });
-        const session = this.getSession(sessionId);
+            return new Response("No session", { status: 401 });
+        const session = await this.sessionStore.get(sessionId);
         if (!session?.accessToken)
-            return new Response('Unauthorized', { status: 401 });
+            return new Response("Unauthorized", { status: 401 });
         // try initial request with access
         let response = await this.makeRequest(request, session.accessToken);
-        // if 401 and we have a refresh, try once
         if (response.status === 401 && session.refreshToken) {
             try {
                 await this.refresh(session);
+                await this.sessionStore.set(sessionId, session);
                 response = await this.makeRequest(request, session.accessToken);
             }
             catch (error) {
-                return new Response('Unauthorized', { status: 401 });
+                return new Response("Unauthorized", { status: 401 });
             }
         }
         return response;
     }
     async makeRequest(request, accessToken) {
-        const allowedMethods = ['GET', 'POST', 'PUT', 'DELETE'];
-        if (!allowedMethods.includes(request.method))
-            return new Response('Method not allowed', { status: 405 });
         const url = new URL(request.url);
+        console.log("got url:", url);
+        console.log("Configured services:", this.config.services);
         const servicePath = Object.keys(this.config.services).find(path => url.pathname.startsWith(path));
         if (!servicePath)
-            return new Response('Service not found', { status: 404 });
+            return new Response("Service not found", { status: 404 });
+        console.log("Matched service path:", servicePath);
         // path traversal
-        const relativePath = url.pathname.slice(servicePath.length);
-        if (relativePath.includes('..') || relativePath.includes('//'))
-            return new Response('Invalid path', { status: 400 });
-        const baseUrl = this.config.services[servicePath].replace(/\/$/, '');
-        const targetUrl = `${baseUrl}${relativePath}`;
+        const baseUrl = this.config.services[servicePath].replace(/\/$/, "");
+        const targetUrl = `${baseUrl}${url.pathname.slice(servicePath.length)}`;
+        if (!targetUrl.startsWith(baseUrl + "/") && targetUrl !== baseUrl)
+            return new Response("Invalid target", { status: 400 });
+        console.log("Proxying to:", targetUrl);
         const proxyHeaders = new Headers(request.headers);
-        proxyHeaders.delete('cookie');
-        proxyHeaders.set('Authorization', `Bearer ${accessToken}`);
+        proxyHeaders.delete("cookie");
+        proxyHeaders.delete("X-CSRF-Token");
+        proxyHeaders.set("Authorization", `Bearer ${accessToken}`);
+        console.log("Proxying request to:", targetUrl, request.method, proxyHeaders);
+        console.log("final url:", targetUrl + url.search);
         return fetch(targetUrl + url.search, {
             method: request.method,
             headers: proxyHeaders,
@@ -241,17 +275,17 @@ export default class OAuth2Server {
     // authenticated: bool, userInfo: object|null
     async checkSession(request) {
         const sessionId = this.getSessionId(request);
-        const session = sessionId ? this.getSession(sessionId) : null;
+        const session = sessionId ? await this.sessionStore.get(sessionId) : null;
         if (session?.accessToken && session.expiresAt > Date.now()) {
             return new Response(JSON.stringify({
                 authenticated: true,
                 userInfo: session.userInfo
             }), {
-                headers: { 'Content-Type': 'application/json' }
+                headers: { "Content-Type": "application/json" }
             });
         }
         return new Response(JSON.stringify({ authenticated: false }), {
-            headers: { 'Content-Type': 'application/json' }
+            headers: { "Content-Type": "application/json" }
         });
     }
 }
