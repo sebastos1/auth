@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use jsonwebtoken::EncodingKey;
 use sea_orm::*;
 use serde::{Deserialize, Serialize};
 
@@ -60,6 +61,7 @@ impl Entity {
         refresh_token: &str,
         client_id: &str,
         db: &DatabaseConnection,
+        encoding_key: &EncodingKey,
     ) -> Result<(String, String, String, crate::user::Model), DbErr> {
         let txn = db.begin().await?;
 
@@ -77,10 +79,19 @@ impl Entity {
             .await?;
         Self::delete_by_id(refresh_token).exec(&txn).await?;
 
-        // new
-        let access_token =
-            crate::token::access::Entity::create(client_id, &refresh_record.user_id, &refresh_record.scopes, &txn)
-                .await?;
+        let user = crate::user::Entity::find_by_id(&refresh_record.user_id)
+            .one(&txn)
+            .await?
+            .ok_or(DbErr::RecordNotFound("User not found".to_string()))?;
+
+        let access_token = crate::token::access::Entity::create(
+            client_id,
+            &user,
+            &refresh_record.scopes,
+            &txn,
+            encoding_key
+        ).await?;
+
         let refresh_token = Self::create(
             &access_token,
             client_id,

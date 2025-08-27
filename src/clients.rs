@@ -22,7 +22,7 @@ pub async fn create_clients(db: &DatabaseConnection) -> Result<()> {
             "chattabong",
             "Chattabong",
             vec!["https://sjallabong.eu/auth/callback", "http://localhost:5173/auth/callback"],
-            vec!["openid", "profile"],
+            vec!["openid", "profile", "roles"],
             vec!["https://sjallabong.eu", "http://localhost:5173"],
         ),
     ];

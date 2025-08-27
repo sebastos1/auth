@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../chattabong/frontend"
+		},
+		{
+			"path": "../../../chattabong/backend"
+		},
+		{
+			"path": "../../../sjallabong-auth"
+		}
+	],
+	"settings": {}
+}

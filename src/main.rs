@@ -3,6 +3,7 @@ use axum::{
     Router, middleware as axum_mw,
     routing::{get, patch, post},
 };
+use jsonwebtoken::EncodingKey;
 use std::time::Duration;
 use std::{net::SocketAddr, sync::Arc};
 use tower::ServiceBuilder;
@@ -37,6 +38,7 @@ async fn get_redis_connection() -> Result<redis::aio::ConnectionManager, redis::
 pub struct AppState {
     pub db: sea_orm::DatabaseConnection,
     pub password: password::PasswordService,
+    pub encoding_key: EncodingKey,
 }
 
 #[tokio::main]
@@ -54,11 +56,15 @@ async fn main() -> Result<()> {
     // todo:
     // redirect uri validation
 
+    let private_key = std::fs::read("private_key.pem").expect("Failed to read private key");
+    let encoding_key = EncodingKey::from_rsa_pem(&private_key).expect("Failed to parse private key");
+
     let db = db::init_db().await?;
 
     let app_state = AppState {
         db: db.clone(),
         password: password::PasswordService::default(),
+        encoding_key,
     };
 
     // basic rate limit

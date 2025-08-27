@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::templates::ErrorTemplate;
 use askama::Template;
 use axum::{
@@ -14,6 +16,12 @@ pub enum AppError {
     Unauthorized(String),
     Forbidden(String),
     Internal(anyhow::Error),
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl AppError {

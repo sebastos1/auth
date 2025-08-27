@@ -32,6 +32,10 @@ impl AuthenticatedUser {
     pub fn has_email(&self) -> bool {
         self.has_scope("email")
     }
+
+    pub fn has_roles(&self) -> bool {
+        self.has_scope("roles")
+    }
 }
 
 pub async fn auth(
