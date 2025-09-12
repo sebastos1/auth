@@ -15,7 +15,7 @@ pub async fn create_clients(db: &DatabaseConnection) -> Result<()> {
             "sjallabong-pool",
             "Sjallabong Pool",
             vec![
-                "https://sjallabong.eu/auth/callback",
+                "https://pool.sjallabong.eu/auth/callback",
                 "http://localhost:8080/auth/callback",
             ],
             vec!["openid", "profile", "pool"],
