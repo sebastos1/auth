@@ -33,6 +33,7 @@ pub async fn headers(request: Request, next: Next) -> Response {
 
     let headers = response.headers_mut();
 
+    // TODO DONT HARDCODE
     let csp = if *crate::IS_PRODUCTION {
         "default-src 'self'; \
         script-src 'self' 'unsafe-inline'; \
@@ -40,7 +41,7 @@ pub async fn headers(request: Request, next: Next) -> Response {
         style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; \
         font-src 'self' https://fonts.gstatic.com; \
         img-src 'self' data: https:; \
-        form-action 'self'; \
+        form-action 'self' https://pool.sjallabong.eu https://sjallabong.eu http://localhost:8080; \
         frame-ancestors 'none'; \
         base-uri 'self'"
     } else {
