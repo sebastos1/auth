@@ -46,7 +46,8 @@ impl Entity {
             crate::jwt::TokenType::AccessToken,
             scopes,
             encoding_key,
-        ).map_err(|e| DbErr::Custom(e.to_string()))?;
+        )
+        .map_err(|e| DbErr::Custom(e.to_string()))?;
 
         let model = ActiveModel {
             token: Set(access_token.clone()),

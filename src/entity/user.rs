@@ -52,3 +52,12 @@ impl ActiveModelBehavior for ActiveModel {
         }
     }
 }
+
+impl Entity {
+    pub async fn update_country(user_id: &str, country: &str, db: &DatabaseConnection) -> Result<(), DbErr> {
+        let mut user: ActiveModel = Self::find_by_id(user_id).one(db).await?.unwrap().into();
+        user.country = Set(Some(country.to_string()));
+        user.update(db).await?;
+        Ok(())
+    }
+}

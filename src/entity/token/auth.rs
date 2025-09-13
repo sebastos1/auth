@@ -66,13 +66,8 @@ impl Entity {
             .await?
             .ok_or(DbErr::RecordNotFound("User not found".to_string()))?;
 
-        let access_token = crate::token::access::Entity::create(
-            client_id, 
-            &user,
-            &auth_code.scopes,
-            &txn,
-            encoding_key
-        ).await?;
+        let access_token =
+            crate::token::access::Entity::create(client_id, &user, &auth_code.scopes, &txn, encoding_key).await?;
 
         let refresh_token = crate::token::refresh::Entity::create(
             &access_token,
@@ -86,8 +81,11 @@ impl Entity {
         // delete auth code
         Self::delete_by_id(code).exec(&txn).await?;
 
-        let user = crate::user::Entity::find_by_id(auth_code.user_id).one(&txn).await?.ok_or(DbErr::RecordNotFound(String::new()))?;
-        
+        let user = crate::user::Entity::find_by_id(auth_code.user_id)
+            .one(&txn)
+            .await?
+            .ok_or(DbErr::RecordNotFound(String::new()))?;
+
         txn.commit().await?;
         Ok((access_token, refresh_token, auth_code.scopes, user))
     }

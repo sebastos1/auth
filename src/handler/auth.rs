@@ -4,6 +4,8 @@ use crate::util::generate_random_string;
 use crate::{error::FormResponse, templates::LoginTemplate};
 use anyhow::Context;
 use askama::Template;
+use axum::extract::ConnectInfo;
+use axum::http::HeaderMap;
 use axum::{
     Form,
     extract::{Query, State},
@@ -12,6 +14,7 @@ use axum::{
 use sea_orm::*;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use tracing::info;
 
 #[derive(Deserialize, Debug, Clone)]
@@ -116,6 +119,8 @@ pub async fn get(
 }
 
 pub async fn post(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     State(app_state): State<AppState>,
     Form(form): Form<LoginForm>,
 ) -> Result<FormResponse<Redirect>, HtmlError> {
@@ -161,7 +166,7 @@ pub async fn post(
     let auth_code = crate::token::auth::ActiveModel {
         code: Set(code.clone()),
         client_id: Set(form.oauth.client_id.clone()),
-        user_id: Set(user.id),
+        user_id: Set(user.id.clone()),
         redirect_uri: Set(form.oauth.redirect_uri.clone()),
         scopes: Set(form.oauth.scope.clone()),
         code_challenge: Set(form.oauth.code_challenge.clone()),
@@ -184,6 +189,19 @@ pub async fn post(
 
     redirect_url.query_pairs_mut().append_pair("code", &code);
     redirect_url.query_pairs_mut().append_pair("state", &form.oauth.state);
+
+    // if a user doesn't have a country, quick check. should only realistically happen on register, and
+    // NEVER if they already have a country!!!!! + it can be changed by them later :)
+    if user.country.is_none() {
+        let user_ip = crate::handler::geoloc::get_forwarded_ip(&headers).unwrap_or_else(|| addr.ip().to_string());
+        let user_id = user.id.clone();
+        let db = app_state.db.clone();
+        tokio::spawn(async move {
+            if let Some(country) = crate::handler::geoloc::get_country_from_ip(&user_ip).await {
+                let _ = crate::user::Entity::update_country(&user_id, &country, &db).await;
+            }
+        });
+    }
 
     Ok(FormResponse::Success(Redirect::to(redirect_url.as_ref())))
 }
