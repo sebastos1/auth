@@ -14,28 +14,23 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use tracing::info;
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct OAuthParams {
+    pub client_id: String,
+    pub redirect_uri: String,
+    pub state: String,
+    pub scope: String,
+    pub code_challenge: String,
+    pub code_challenge_method: String,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct LoginForm {
     login: String, // username
     password: String,
-
-    client_id: String,
-    redirect_uri: String,
-    state: Option<String>,
-    scopes: String,
-    code_challenge: String,
-    code_challenge_method: String,
     csrf_token: String,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct AuthorizeQuery {
-    client_id: String,
-    redirect_uri: String,
-    scope: Option<String>,
-    state: String,
-    code_challenge: String,
-    code_challenge_method: String,
+    #[serde(flatten)]
+    pub oauth: OAuthParams,
 }
 
 fn validate_login_format(form: &LoginForm) -> HashMap<String, String> {
@@ -67,60 +62,53 @@ async fn authenticate_user(form: &LoginForm, app_state: &AppState) -> Result<cra
 }
 
 pub async fn get(
-    Query(params): Query<AuthorizeQuery>,
+    Query(oauth): Query<OAuthParams>,
     State(app_state): State<AppState>,
 ) -> Result<Html<String>, HtmlError> {
     info!(
-        client_id = %params.client_id,
-        scopes = ?params.scope,
+        client_id = %oauth.client_id,
+        scopes = ?oauth.scope,
         "Authorization request started"
     );
 
-    if params.code_challenge_method != "S256" {
+    if oauth.code_challenge_method != "S256" {
         return Err(AppError::bad_request(format!(
             "Invalid code challenge method: {}",
-            params.code_challenge_method
+            oauth.code_challenge_method
         ))
         .into());
     }
 
-    if params.code_challenge.is_empty() || params.state.is_empty() {
+    if oauth.code_challenge.is_empty() || oauth.state.is_empty() {
         return Err(AppError::bad_request("Missing code challenge or state").into());
     }
 
-    let client = crate::util::validate_client_origin(&params.client_id, &app_state.db).await?;
-    info!("Client origin validated successfully");
+    let client = crate::util::get_client(&oauth.client_id, &app_state.db).await?;
 
-    crate::util::validate_redirect_uri(&client, &params.redirect_uri)?;
+    crate::util::validate_redirect_uri(&client, &oauth.redirect_uri)?;
 
-    let requested_scopes: Vec<String> = params
-        .scope
-        .as_deref()
-        .unwrap_or("openid")
-        .split_whitespace()
-        .map(String::from)
-        .collect();
+    let requested_scopes: Vec<String> = oauth.scope.split_whitespace().map(String::from).collect();
 
     let allowed_scopes = client.get_allowed_scopes()?;
     for scope in &requested_scopes {
         if !allowed_scopes.contains(scope) {
             return Err(AppError::bad_request(format!(
                 "Scope '{}' not allowed for client '{}'",
-                scope, params.client_id
+                scope, oauth.client_id
             ))
             .into());
         }
     }
 
     let template = LoginTemplate {
-        client_id: params.client_id,
-        redirect_uri: params.redirect_uri,
-        state: params.state,
-        scopes: requested_scopes.join(" "),
+        client_id: oauth.client_id,
+        redirect_uri: oauth.redirect_uri,
+        state: oauth.state,
+        scope: oauth.scope,
         errors: HashMap::new(),
         login: String::new(),
-        code_challenge: params.code_challenge,
-        code_challenge_method: params.code_challenge_method,
+        code_challenge: oauth.code_challenge,
+        code_challenge_method: oauth.code_challenge_method,
         csrf_token: crate::util::generate_csrf_token().await,
     };
 
@@ -131,31 +119,32 @@ pub async fn post(
     State(app_state): State<AppState>,
     Form(form): Form<LoginForm>,
 ) -> Result<FormResponse<Redirect>, HtmlError> {
-    let render_error = async |errors: HashMap<String, String>| -> Result<FormResponse<Redirect>, HtmlError> {
-        let template = LoginTemplate {
-            client_id: form.client_id.clone(),
-            redirect_uri: form.redirect_uri.clone(),
-            state: form.state.clone().unwrap_or_default(),
-            scopes: form.scopes.clone(),
-            errors,
-            login: form.login.clone(),
-            code_challenge: form.code_challenge.clone(),
-            code_challenge_method: form.code_challenge_method.clone(),
-            csrf_token: crate::util::generate_csrf_token().await,
+    let oauth = &form.oauth;
+    let render_error =
+        async |errors: HashMap<String, String>, form: &LoginForm| -> Result<FormResponse<Redirect>, HtmlError> {
+            let template = LoginTemplate {
+                client_id: oauth.client_id.clone(),
+                redirect_uri: oauth.redirect_uri.clone(),
+                state: oauth.state.clone(),
+                scope: oauth.scope.clone(),
+                errors,
+                login: form.login.clone(),
+                code_challenge: oauth.code_challenge.clone(),
+                code_challenge_method: oauth.code_challenge_method.clone(),
+                csrf_token: crate::util::generate_csrf_token().await,
+            };
+            Ok(FormResponse::ValidationErrors(Html(template.render()?)))
         };
-        let rendered = template.render()?;
-        Ok(FormResponse::ValidationErrors(Html(rendered)))
-    };
 
     let format_errors = validate_login_format(&form);
     if !format_errors.is_empty() {
-        return render_error(format_errors).await;
+        return render_error(format_errors, &form).await;
     }
 
     if !crate::util::validate_csrf_token(&form.csrf_token).await {
         let mut errors = HashMap::new();
         errors.insert("csrf".to_string(), "Invalid request, try again".to_string());
-        return render_error(errors).await;
+        return render_error(errors, &form).await;
     }
 
     let user = match authenticate_user(&form, &app_state).await {
@@ -163,21 +152,20 @@ pub async fn post(
         Err(AppError::Unauthorized(msg)) => {
             let mut errors = HashMap::new();
             errors.insert("general".to_string(), msg);
-            return render_error(errors).await;
+            return render_error(errors, &form).await;
         }
         Err(e) => return Err(e.into()),
     };
-    info!("User authenticated: {}", user.username);
 
     let code = generate_random_string(32);
     let auth_code = crate::token::auth::ActiveModel {
         code: Set(code.clone()),
-        client_id: Set(form.client_id.clone()),
+        client_id: Set(form.oauth.client_id.clone()),
         user_id: Set(user.id),
-        redirect_uri: Set(form.redirect_uri.clone()),
-        scopes: Set(form.scopes.clone()),
-        code_challenge: Set(form.code_challenge.clone()),
-        code_challenge_method: Set(form.code_challenge_method.clone()),
+        redirect_uri: Set(form.oauth.redirect_uri.clone()),
+        scopes: Set(form.oauth.scope.clone()),
+        code_challenge: Set(form.oauth.code_challenge.clone()),
+        code_challenge_method: Set(form.oauth.code_challenge_method.clone()),
         ..Default::default()
     };
 
@@ -186,19 +174,16 @@ pub async fn post(
         .await
         .context("Failed to create auth code")?;
 
-    let mut redirect_url = url::Url::parse(&form.redirect_uri).context("Invalid redirect URI")?;
+    let mut redirect_url = url::Url::parse(&form.oauth.redirect_uri).context("Invalid redirect URI")?;
 
-    // revalidate this bad boy
-    let client = crate::client::Entity::find_by_id(&form.client_id)
+    let client = crate::client::Entity::find_by_id(&form.oauth.client_id)
         .one(&app_state.db)
         .await?
-        .or_bad_request(format!("Invalid client_id: {}", form.client_id))?;
-    crate::util::validate_redirect_uri(&client, &form.redirect_uri)?;
+        .or_bad_request(format!("Invalid client_id: {}", form.oauth.client_id))?;
+    crate::util::validate_redirect_uri(&client, &form.oauth.redirect_uri)?;
 
     redirect_url.query_pairs_mut().append_pair("code", &code);
-    if let Some(state) = &form.state {
-        redirect_url.query_pairs_mut().append_pair("state", state);
-    }
+    redirect_url.query_pairs_mut().append_pair("state", &form.oauth.state);
 
     Ok(FormResponse::Success(Redirect::to(redirect_url.as_ref())))
 }

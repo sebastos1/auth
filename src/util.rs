@@ -25,7 +25,7 @@ pub fn verify_pkce(code_verifier: &str, code_challenge: &str) -> bool {
     computed_challenge == code_challenge
 }
 
-pub async fn validate_client_origin(client_id: &str, db: &DatabaseConnection) -> Result<client::Model, AppError> {
+pub async fn get_client(client_id: &str, db: &DatabaseConnection) -> Result<client::Model, AppError> {
     let client = client::Entity::find_by_id(client_id)
         .one(db)
         .await?

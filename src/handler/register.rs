@@ -1,3 +1,4 @@
+use super::auth::OAuthParams;
 use crate::AppState;
 use crate::error::{AppError, FormResponse, HtmlError};
 use crate::handler::geoloc::{get_country_from_ip, get_forwarded_ip};
@@ -18,37 +19,23 @@ pub struct CreateUserRequest {
     email: String,
     username: String,
     password: String,
-    client_id: String,
-    redirect_uri: String,
-    state: String,
-    scopes: String,
-    code_challenge: String,
-    code_challenge_method: String,
     csrf_token: String,
-}
-
-#[derive(Deserialize)]
-pub struct RegisterQuery {
-    client_id: Option<String>,
-    redirect_uri: Option<String>,
-    scope: Option<String>,
-    state: String,
-    code_challenge: String,
-    code_challenge_method: String,
+    #[serde(flatten)]
+    pub oauth: OAuthParams,
 }
 
 // this needs the client id and allat in order to login after
-pub async fn get(Query(oauth_params): Query<RegisterQuery>) -> Result<Html<String>, HtmlError> {
+pub async fn get(Query(oauth): Query<OAuthParams>) -> Result<Html<String>, HtmlError> {
     let template = RegisterTemplate {
         errors: HashMap::new(),
         email: String::new(),
         username: String::new(),
-        client_id: oauth_params.client_id.unwrap_or_default(),
-        redirect_uri: oauth_params.redirect_uri.unwrap_or_default(),
-        state: oauth_params.state,
-        scopes: oauth_params.scope.unwrap_or_default(),
-        code_challenge: oauth_params.code_challenge,
-        code_challenge_method: oauth_params.code_challenge_method,
+        client_id: oauth.client_id,
+        redirect_uri: oauth.redirect_uri,
+        state: oauth.state,
+        scope: oauth.scope,
+        code_challenge: oauth.code_challenge,
+        code_challenge_method: oauth.code_challenge_method,
         csrf_token: crate::util::generate_csrf_token().await,
     };
     Ok(Html(template.render()?))
@@ -140,17 +127,18 @@ pub async fn post(
     State(app_state): State<AppState>,
     Form(form): Form<CreateUserRequest>,
 ) -> Result<FormResponse<Redirect>, HtmlError> {
+    let oauth = &form.oauth;
     let render_error = async |errors: HashMap<String, String>| -> Result<FormResponse<Redirect>, HtmlError> {
         let template = RegisterTemplate {
             errors,
             email: form.email.clone(),
             username: form.username.clone(),
-            client_id: form.client_id.clone(),
-            redirect_uri: form.redirect_uri.clone(),
-            state: form.state.clone(),
-            scopes: form.scopes.clone(),
-            code_challenge: form.code_challenge.clone(),
-            code_challenge_method: form.code_challenge_method.clone(),
+            client_id: oauth.client_id.clone(),
+            redirect_uri: oauth.redirect_uri.clone(),
+            state: oauth.state.clone(),
+            scope: oauth.scope.clone(),
+            code_challenge: oauth.code_challenge.clone(),
+            code_challenge_method: oauth.code_challenge_method.clone(),
             csrf_token: crate::util::generate_csrf_token().await,
         };
         let rendered = template.render()?;
@@ -192,12 +180,12 @@ pub async fn post(
 
     let redirect_url = format!(
         "/authorize?client_id={}&redirect_uri={}&scope={}&state={}&code_challenge={}&code_challenge_method={}",
-        urlencoding::encode(&form.client_id),
-        urlencoding::encode(&form.redirect_uri),
-        urlencoding::encode(&form.scopes),
-        urlencoding::encode(&form.state),
-        urlencoding::encode(&form.code_challenge),
-        urlencoding::encode(&form.code_challenge_method)
+        urlencoding::encode(&oauth.client_id),
+        urlencoding::encode(&oauth.redirect_uri),
+        urlencoding::encode(&oauth.scope),
+        urlencoding::encode(&oauth.state),
+        urlencoding::encode(&oauth.code_challenge),
+        urlencoding::encode(&oauth.code_challenge_method)
     );
 
     Ok(FormResponse::Success(Redirect::to(&redirect_url)))
