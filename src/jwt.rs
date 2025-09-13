@@ -71,10 +71,15 @@ pub fn create_jwt(
     encoding_key: &EncodingKey,
 ) -> Result<String, AppError> {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let mut issuer = "https://auth.sjallabong.eu";
+
+    if !*crate::IS_PRODUCTION {
+        issuer = "http://localhost:3001";
+    }
 
     let base = BaseClaims {
         sub: user.id.clone(),
-        iss: "https://auth.sjallabong.eu".to_string(),
+        iss: issuer.to_string(),
         aud: client_id.to_string(),
         exp: now + 3600,
         iat: now,
