@@ -201,6 +201,7 @@ dependencies = [
  "redis",
  "reqwest",
  "ring",
+ "rsa",
  "sea-orm",
  "serde",
  "serde_json",

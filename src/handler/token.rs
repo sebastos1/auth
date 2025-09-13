@@ -48,7 +48,7 @@ async fn handle_authorization_code(state: &AppState, form: TokenRequest) -> Resu
         &redirect_uri,
         &form.code_verifier,
         &state.db,
-        &state.encoding_key,
+        &state.jwk.encoding_key,
     )
     .await?;
 
@@ -58,7 +58,7 @@ async fn handle_authorization_code(state: &AppState, form: TokenRequest) -> Resu
             &form.client_id,
             crate::jwt::TokenType::IdToken,
             &scopes,
-            &state.encoding_key,
+            &state.jwk.encoding_key,
         )?)
     } else {
         None
@@ -77,9 +77,13 @@ async fn handle_authorization_code(state: &AppState, form: TokenRequest) -> Resu
 async fn handle_refresh_token(state: &AppState, form: TokenRequest) -> Result<Json<TokenResponse>, AppError> {
     let refresh_token = form.refresh_token.or_bad_request("Missing refresh token")?;
 
-    let (access_token, new_refresh_token, scopes, user) =
-        crate::token::refresh::Entity::refresh_tokens(&refresh_token, &form.client_id, &state.db, &state.encoding_key)
-            .await?;
+    let (access_token, new_refresh_token, scopes, user) = crate::token::refresh::Entity::refresh_tokens(
+        &refresh_token,
+        &form.client_id,
+        &state.db,
+        &state.jwk.encoding_key,
+    )
+    .await?;
 
     let id_token = if scopes.contains("openid") {
         Some(crate::jwt::create_jwt(
@@ -87,7 +91,7 @@ async fn handle_refresh_token(state: &AppState, form: TokenRequest) -> Result<Js
             &form.client_id,
             crate::jwt::TokenType::IdToken,
             &scopes,
-            &state.encoding_key,
+            &state.jwk.encoding_key,
         )?)
     } else {
         None

@@ -1,13 +1,28 @@
 use crate::error::AppError;
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
+use rsa::RsaPublicKey;
+use rsa::pkcs8::DecodePublicKey;
+use rsa::traits::PublicKeyParts;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub fn generate_jwks() -> (EncodingKey, String) {
+#[derive(Clone)]
+pub struct Jwk {
+    pub encoding_key: EncodingKey,
+    pub n: rsa::BigUint,
+    pub e: rsa::BigUint,
+}
+
+pub fn generate_jwk() -> Jwk {
     let private_key = std::fs::read("private_key.pem").expect("Failed to read private key");
-    let public_key = std::fs::read_to_string("public_key.pem").expect("Failed to read public key");
+    let public_key_pem = std::fs::read_to_string("public_key.pem").expect("Failed to read public key");
     let encoding_key = EncodingKey::from_rsa_pem(&private_key).expect("Failed to parse private key");
-    (encoding_key, public_key)
+    let public_key = RsaPublicKey::from_public_key_pem(&public_key_pem).expect("Failed to parse public key");
+    Jwk {
+        encoding_key,
+        n: public_key.n().clone(),
+        e: public_key.e().clone(),
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

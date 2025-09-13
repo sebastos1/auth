@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod geoloc;
+pub mod jwks;
 pub mod register;
 pub mod revoke;
 pub mod token;

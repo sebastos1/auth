@@ -3,7 +3,6 @@ use axum::{
     Router, middleware as axum_mw,
     routing::{get, patch, post},
 };
-use jsonwebtoken::EncodingKey;
 use std::time::Duration;
 use std::{net::SocketAddr, sync::Arc};
 use tower::ServiceBuilder;
@@ -26,6 +25,8 @@ use entity::{client, token, user};
 
 use std::sync::LazyLock;
 
+use crate::jwt::Jwk;
+
 static IS_PRODUCTION: LazyLock<bool> =
     LazyLock::new(|| std::env::var("AUTH_ENV").unwrap_or_else(|_| "development".to_string()) == "production");
 
@@ -39,8 +40,7 @@ async fn get_redis_connection() -> Result<redis::aio::ConnectionManager, redis::
 pub struct AppState {
     pub db: sea_orm::DatabaseConnection,
     pub password: password::PasswordService,
-    pub encoding_key: EncodingKey,
-    pub public_key: String,
+    pub jwk: Jwk,
 }
 
 #[tokio::main]
@@ -58,15 +58,14 @@ async fn main() -> Result<()> {
     // todo:
     // redirect uri validation
 
-    let (encoding_key, public_key) = jwt::generate_jwks();
+    let jwk = jwt::generate_jwk();
 
     let db = db::init_db().await?;
 
     let app_state = AppState {
         db: db.clone(),
         password: password::PasswordService::default(),
-        encoding_key,
-        public_key,
+        jwk,
     };
 
     // basic rate limit
@@ -84,7 +83,7 @@ async fn main() -> Result<()> {
         .route("/authorize", get(handler::auth::get).post(handler::auth::post))
         .route("/register", get(handler::register::get).post(handler::register::post))
         .route("/revoke", post(handler::revoke::post))
-        // .route("/.well-known/openid-configuration",
+        .route("/.well-known/jwks.json", get(handler::jwks::get))
         .layer(GovernorLayer::new(rate_limit_config))
         .merge(
             Router::new()
