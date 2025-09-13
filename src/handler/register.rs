@@ -54,28 +54,56 @@ pub async fn get(Query(oauth_params): Query<RegisterQuery>) -> Result<Html<Strin
     Ok(Html(template.render()?))
 }
 
+#[derive(PartialEq, Eq, Hash)]
+enum InputError {
+    Email,
+    Username,
+    Password,
+}
+
 fn validate_format(req: &CreateUserRequest) -> HashMap<String, String> {
     let mut errors = HashMap::new();
 
     if req.email.is_empty() || !req.email.contains('@') {
-        errors.insert("email".to_string(), "Please enter a valid email address".to_string());
+        errors.insert(InputError::Email, "Please enter a valid email address");
     }
 
-    if req.username.len() < 3 || req.username.len() > 30 {
-        errors.insert(
-            "username".to_string(),
-            "Username must be between 3 and 30 characters".to_string(),
-        );
+    if req.username.trim() != req.username {
+        errors.insert(InputError::Username, "Username cannot start or end with spaces");
     }
 
-    if req.password.len() < 8 {
-        errors.insert(
-            "password".to_string(),
-            "Password must be at least 8 characters".to_string(),
-        );
+    let username = req.username.trim();
+    if username.contains("  ") {
+        errors.insert(InputError::Username, "Username cannot contain consecutive spaces");
+    }
+
+    fn is_valid_username(c: char) -> bool {
+        c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | ' ' | '\'')
+    }
+
+    if !username.chars().all(is_valid_username) {
+        errors.insert(InputError::Username, "Something not allowed in username");
+    }
+
+    if username.len() < 3 || username.len() > 24 {
+        errors.insert(InputError::Username, "Username must be 3-24 characters");
+    }
+
+    if req.password.len() < 6 || req.password.len() > 128 {
+        errors.insert(InputError::Password, "Password must be 6+ characters long");
     }
 
     errors
+        .into_iter()
+        .map(|(k, v)| {
+            let key = match k {
+                InputError::Email => "email",
+                InputError::Username => "username",
+                InputError::Password => "password",
+            };
+            (key.to_string(), v.to_string())
+        })
+        .collect()
 }
 
 async fn validate_database(
