@@ -7,7 +7,6 @@ use askama::Template;
 use axum::{
     Form,
     extract::{Query, State},
-    http::HeaderMap,
     response::{Html, Redirect},
 };
 use sea_orm::*;
@@ -70,7 +69,6 @@ async fn authenticate_user(form: &LoginForm, app_state: &AppState) -> Result<cra
 pub async fn get(
     Query(params): Query<AuthorizeQuery>,
     State(app_state): State<AppState>,
-    headers: HeaderMap,
 ) -> Result<Html<String>, HtmlError> {
     info!(
         client_id = %params.client_id,
@@ -90,7 +88,7 @@ pub async fn get(
         return Err(AppError::bad_request("Missing code challenge or state").into());
     }
 
-    let client = crate::util::validate_client_origin(&params.client_id, &headers, &app_state.db).await?;
+    let client = crate::util::validate_client_origin(&params.client_id, &app_state.db).await?;
     info!("Client origin validated successfully");
 
     crate::util::validate_redirect_uri(&client, &params.redirect_uri)?;

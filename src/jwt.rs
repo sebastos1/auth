@@ -1,7 +1,14 @@
-use jsonwebtoken::{encode, Header, EncodingKey, Algorithm};
-use serde::{Serialize, Deserialize};
-use std::time::{SystemTime, UNIX_EPOCH};
 use crate::error::AppError;
+use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
+use serde::{Deserialize, Serialize};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+pub fn generate_jwks() -> (EncodingKey, String) {
+    let private_key = std::fs::read("private_key.pem").expect("Failed to read private key");
+    let public_key = std::fs::read_to_string("public_key.pem").expect("Failed to read public key");
+    let encoding_key = EncodingKey::from_rsa_pem(&private_key).expect("Failed to parse private key");
+    (encoding_key, public_key)
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum TokenType {
@@ -12,7 +19,7 @@ pub enum TokenType {
 #[derive(Debug, Serialize, Deserialize)]
 struct BaseClaims {
     sub: String,
-    iss: String, 
+    iss: String,
     aud: String,
     exp: u64,
     iat: u64,
@@ -57,7 +64,7 @@ pub fn create_jwt(
         exp: now + 3600,
         iat: now,
     };
-    
+
     match token_type {
         TokenType::AccessToken => {
             let claims = AccessTokenClaims {
@@ -70,15 +77,23 @@ pub fn create_jwt(
                 is_moderator: user.is_moderator,
                 is_member: user.is_member,
             };
-            
+
             let header = Header::new(Algorithm::RS256);
             encode(&header, &claims, encoding_key).map_err(AppError::from)
-        },
+        }
         TokenType::IdToken => {
             let claims = IdTokenClaims {
                 base,
-                email: if scopes.contains("email") { Some(user.email.clone()) } else { None },
-                username: if scopes.contains("profile") { Some(user.username.clone()) } else { None },
+                email: if scopes.contains("email") {
+                    Some(user.email.clone())
+                } else {
+                    None
+                },
+                username: if scopes.contains("profile") {
+                    Some(user.username.clone())
+                } else {
+                    None
+                },
                 // more to come
             };
 

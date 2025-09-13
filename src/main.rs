@@ -17,16 +17,17 @@ mod db;
 mod entity;
 mod error;
 mod handler;
+mod jwt;
 mod middleware;
 mod password;
 mod templates;
 mod util;
-mod jwt;
 use entity::{client, token, user};
 
 use std::sync::LazyLock;
 
-static IS_PRODUCTION: LazyLock<bool> = LazyLock::new(|| std::env::var("AUTH_ENV").unwrap_or_else(|_| "development".to_string()) == "production");
+static IS_PRODUCTION: LazyLock<bool> =
+    LazyLock::new(|| std::env::var("AUTH_ENV").unwrap_or_else(|_| "development".to_string()) == "production");
 
 async fn get_redis_connection() -> Result<redis::aio::ConnectionManager, redis::RedisError> {
     let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
@@ -39,6 +40,7 @@ pub struct AppState {
     pub db: sea_orm::DatabaseConnection,
     pub password: password::PasswordService,
     pub encoding_key: EncodingKey,
+    pub public_key: String,
 }
 
 #[tokio::main]
@@ -56,8 +58,7 @@ async fn main() -> Result<()> {
     // todo:
     // redirect uri validation
 
-    let private_key = std::fs::read("private_key.pem").expect("Failed to read private key");
-    let encoding_key = EncodingKey::from_rsa_pem(&private_key).expect("Failed to parse private key");
+    let (encoding_key, public_key) = jwt::generate_jwks();
 
     let db = db::init_db().await?;
 
@@ -65,6 +66,7 @@ async fn main() -> Result<()> {
         db: db.clone(),
         password: password::PasswordService::default(),
         encoding_key,
+        public_key,
     };
 
     // basic rate limit
@@ -82,15 +84,13 @@ async fn main() -> Result<()> {
         .route("/authorize", get(handler::auth::get).post(handler::auth::post))
         .route("/register", get(handler::register::get).post(handler::register::post))
         .route("/revoke", post(handler::revoke::post))
+        // .route("/.well-known/openid-configuration",
         .layer(GovernorLayer::new(rate_limit_config))
         .merge(
             Router::new()
                 .route("/userinfo", get(handler::userinfo::get))
                 .route("/update/user", patch(handler::update::user::patch))
-                .layer(axum_mw::from_fn_with_state(
-                    app_state.clone(),
-                    middleware::user::auth,
-                )),
+                .layer(axum_mw::from_fn_with_state(app_state.clone(), middleware::user::auth)),
         )
         // .route("/success", get(handler::success::get))
         // .route("/sdk", get(handler::sdk::get))
