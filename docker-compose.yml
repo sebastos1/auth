@@ -30,8 +30,7 @@ services:
   auth:
     build: .
     environment:
-      - RUST_LOG=info
-      # - AUTH_SERVER_URL=https://auth.sjallabong.eu
+      - RUST_LOG=auth=debug,tower_http=info
       - AUTH_ENV=production
       - DATABASE_URL=postgresql://auth_user:auth_password@db:5432/auth
       - REDIS_URL=redis://redis:6379

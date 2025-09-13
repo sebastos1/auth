@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::IS_PRODUCTION;
 use anyhow::Result;
 use sea_orm::*;
@@ -9,7 +11,20 @@ pub async fn init_db() -> Result<DatabaseConnection> {
         std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:auth_dev.db?mode=rwc".to_string())
     };
 
-    let db = Database::connect(&database_url).await?;
+    let mut opt = ConnectOptions::new(database_url);
+
+    if *IS_PRODUCTION {
+        opt.max_connections(20)
+            .min_connections(5)
+            .connect_timeout(Duration::from_secs(10))
+            .acquire_timeout(Duration::from_secs(10))
+            .idle_timeout(Duration::from_secs(300))
+            .max_lifetime(Duration::from_secs(3600))
+            .sqlx_logging_level(tracing::log::LevelFilter::Info);
+    }
+
+    let db = Database::connect(opt).await?;
+
     let backend = db.get_database_backend();
     let schema = Schema::new(backend);
     let stmt = schema.create_table_from_entity(crate::user::Entity);
