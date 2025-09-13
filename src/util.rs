@@ -39,21 +39,21 @@ pub async fn validate_client_origin(
         return Ok(client);
     }
 
-    let origin = headers.get("origin").and_then(|h| h.to_str().ok());
-    let forwarded_host = headers.get("x-forwarded-host").and_then(|h| h.to_str().ok());
+    // let origin = headers.get("origin").and_then(|h| h.to_str().ok());
+    // let forwarded_host = headers.get("x-forwarded-host").and_then(|h| h.to_str().ok());
 
-    let effective_origin = forwarded_host
-        .map(|h| format!("https://{}", h))
-        .or_else(|| origin.map(String::from))
-        .or_bad_request("Origin or X-Forwarded-Host header required")?;
+    // let effective_origin = forwarded_host
+    //     .map(|h| format!("https://{}", h))
+    //     .or_else(|| origin.map(String::from))
+    //     .or_bad_request("Origin or X-Forwarded-Host header required")?;
 
-    let authorized_origins = client.get_authorized_origins()?;
-    if !authorized_origins.contains(&effective_origin) {
-        return Err(AppError::forbidden(format!(
-            "Origin not authorized: {}",
-            effective_origin
-        )));
-    }
+    // let authorized_origins = client.get_authorized_origins()?;
+    // if !authorized_origins.contains(&effective_origin) {
+    //     return Err(AppError::forbidden(format!(
+    //         "Origin not authorized: {}",
+    //         effective_origin
+    //     )));
+    // }
 
     Ok(client)
 }
@@ -71,10 +71,7 @@ pub fn validate_redirect_uri(client: &client::Model, redirect_uri: &str) -> Resu
 
     let redirect_uris = client.get_redirect_uris()?;
     if !redirect_uris.contains(&redirect_uri.to_string()) {
-        return Err(AppError::bad_request(format!(
-            "Invalid redirect_uri: {}",
-            redirect_uri
-        )));
+        return Err(AppError::bad_request(format!("Invalid redirect_uri: {}", redirect_uri)));
     }
     Ok(())
 }
