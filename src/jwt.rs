@@ -61,6 +61,8 @@ struct IdTokenClaims {
     email: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    country: Option<String>,
 }
 
 pub fn create_jwt(
@@ -114,7 +116,11 @@ pub fn create_jwt(
                 } else {
                     None
                 },
-                // more to come
+                country: if scopes.contains("profile") {
+                    user.country.clone()
+                } else {
+                    None
+                },
             };
 
             let header = Header::new(Algorithm::RS256);

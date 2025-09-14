@@ -91,8 +91,6 @@ async fn main() -> Result<()> {
                 .route("/update/user", patch(handler::update::user::patch))
                 .layer(axum_mw::from_fn_with_state(app_state.clone(), middleware::user::auth)),
         )
-        // .route("/success", get(handler::success::get))
-        // .route("/sdk", get(handler::sdk::get))
         .route("/geolocate", get(handler::geoloc::get))
         .with_state(app_state)
         .layer(axum_mw::from_fn(middleware::security::headers))
