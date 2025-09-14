@@ -7,13 +7,14 @@ COPY templates ./templates
 
 RUN cargo build --release
 
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+FROM gcr.io/distroless/cc-debian12
 
 WORKDIR /app
 COPY --from=builder /app/target/release/auth .
 COPY --from=builder /app/templates ./templates
 COPY private_key.pem ./private_key.pem
+COPY public_key.pem ./public_key.pem
+COPY GeoLite2-Country.mmdb ./GeoLite2-Country.mmdb
 
 EXPOSE 3001
 CMD ["./auth"]
